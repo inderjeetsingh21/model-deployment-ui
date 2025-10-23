@@ -6,7 +6,7 @@ import DependencyManager from './DependencyManager';
 import DeploymentConfig from './DeploymentConfig';
 import DeploymentSummary from './DeploymentSummary';
 import DeploymentProgress from './DeploymentProgress';
-import deploymentAPI from '../services/api';
+import { deployModel } from '../services/api';
 
 const DeploymentWizard = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -64,7 +64,7 @@ const DeploymentWizard = () => {
   const handleDeploy = async () => {
     try {
       setIsDeploying(true);
-      const result = await deploymentAPI.startDeployment(config);
+      const result = await deployModel(config);
       setDeploymentId(result.deployment_id);
     } catch (error) {
       console.error('Deployment error:', error);

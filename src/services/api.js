@@ -2,8 +2,8 @@
 import axios from 'axios';
 
 // Configuration from environment variables
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const API_PREFIX = import.meta.env.VITE_API_PREFIX || '/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+const API_PREFIX = import.meta.env.VITE_API_PREFIX;
 
 // Endpoints configuration
 const ENDPOINTS = {
@@ -25,7 +25,7 @@ console.log('========================');
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 120000,  //30000 before
   headers: {
     'Content-Type': 'application/json',
   }
@@ -122,13 +122,22 @@ export const deployModel = async (config) => {
   try {
     // Normalize config to match backend expectations
     const deployConfig = {
-      model_name: config.model_name || config.modelName,
-      api_type: config.api_type || config.apiType || 'REST',
-      port: parseInt(config.port) || 8001,
-      workers: parseInt(config.workers) || 4,
-      target: config.target || 'Local Process',
-      framework: config.framework || 'pytorch',
-      dependencies: Array.isArray(config.dependencies) ? config.dependencies : [],
+      // model_name: config.model_name || config.modelName,
+      // api_type: config.api_type || config.apiType || 'REST',
+      // port: parseInt(config.port) || 8001,
+      // workers: parseInt(config.workers) || 4,
+      // target: config.target || 'Local Process',
+      // framework: config.framework || 'pytorch',
+      // dependencies: Array.isArray(config.dependencies) ? config.dependencies : [],
+
+      model_name: config.deploymentName,
+      api_type: config.apiType.toUpperCase(),
+      port: parseInt(config.apiPort, 10),
+      workers: parseInt(config.workers, 10),
+      target: config.deploymentTarget === 'local' ? 'Local Process' : 'Docker',
+      framework: 'pytorch', // or extract dynamically
+      dependencies: config.additionalDeps?.length ? config.additionalDeps : ['torch'],
+
     };
 
     console.log('[Deploy] Configuration:', deployConfig);
