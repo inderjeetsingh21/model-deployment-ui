@@ -3,10 +3,6 @@
 
 import axios from 'axios';
 
-<<<<<<< HEAD
-=======
-// Configuration from environment variables
->>>>>>> parent of ca2a880 (Updated Code)
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const API_PREFIX = import.meta.env.VITE_API_PREFIX || '/api';
 
@@ -14,11 +10,7 @@ console.log('API Configuration:', { API_BASE_URL, API_PREFIX });
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-<<<<<<< HEAD
   timeout: 120000, // 2 minutes timeout
-=======
-  timeout: 30000,
->>>>>>> parent of ca2a880 (Updated Code)
   headers: {
     'Content-Type': 'application/json',
   }
@@ -84,7 +76,6 @@ export const uploadModel = async (file, modelName) => {
  * Deploy model (async - returns immediately with deployment ID)
  */
 export const deployModel = async (config) => {
-<<<<<<< HEAD
   const deployConfig = {
     // model_name: config.model_name || config.modelName,
     // api_type: config.api_type || config.apiType || 'REST',
@@ -106,19 +97,6 @@ export const deployModel = async (config) => {
   const response = await api.post(`${API_PREFIX}/deploy`, deployConfig, {
     timeout: 10000, // Short timeout since it returns immediately
   });
-=======
-  try {
-    // Normalize config to match backend expectations
-    const deployConfig = {
-      model_name: config.model_name || config.modelName,
-      api_type: config.api_type || config.apiType || 'REST',
-      port: parseInt(config.port) || 8001,
-      workers: parseInt(config.workers) || 4,
-      target: config.target || 'Local Process',
-      framework: config.framework || 'pytorch',
-      dependencies: Array.isArray(config.dependencies) ? config.dependencies : [],
-    };
->>>>>>> parent of ca2a880 (Updated Code)
 
   return response.data;
 };
