@@ -4,6 +4,10 @@
 import { useState } from 'react';
 import { uploadModel, deployModel } from '../services/api';
 import DeploymentProgress from './DeploymentProgress';
+<<<<<<< HEAD
+=======
+import deploymentAPI from '../services/api';
+>>>>>>> parent of ca2a880 (Updated Code)
 
 function DeploymentWizard() {
   const [step, setStep] = useState(1); // 1: Upload, 2: Configure, 3: Progress
@@ -72,6 +76,7 @@ function DeploymentWizard() {
     setError(null);
 
     try {
+<<<<<<< HEAD
       // Deploy configuration
       const deployConfig = {
         model_name: modelName,
@@ -91,6 +96,10 @@ function DeploymentWizard() {
       console.log('Deploy initiated:', result);
       
       // Store deployment ID and move to progress step
+=======
+      setIsDeploying(true);
+      const result = await deploymentAPI.startDeployment(config);
+>>>>>>> parent of ca2a880 (Updated Code)
       setDeploymentId(result.deployment_id);
       setStep(3);
     } catch (err) {

@@ -179,13 +179,18 @@ async def upload_model(
 
 @app.post("/api/deploy")
 async def deploy_model(config: DeploymentConfig):
+<<<<<<< HEAD
     """Deploy a model with the specified configuration (async)"""
+=======
+    """Deploy a model with the specified configuration"""
+>>>>>>> parent of ca2a880 (Updated Code)
     try:
         deployment_id = str(uuid.uuid4())[:8]
         
         # Find available port
         port = find_available_port(config.port)
         
+<<<<<<< HEAD
         # Store deployment info immediately with "initializing" status
         active_deployments[deployment_id] = {
             "deployment_id": deployment_id,
@@ -236,6 +241,13 @@ async def deploy_model_async(deployment_id: str, config: DeploymentConfig, port:
         active_deployments[deployment_id]["message"] = "Generating model server..."
         await broadcast_status(deployment_id)
         
+=======
+        # Create deployment directory
+        deployment_dir = MODELS_DIR / f"{config.model_name}_{deployment_id}"
+        deployment_dir.mkdir(exist_ok=True)
+        
+        # Create model server script
+>>>>>>> parent of ca2a880 (Updated Code)
         server_script = create_model_server_script(
             deployment_dir,
             config.model_name,
@@ -244,6 +256,7 @@ async def deploy_model_async(deployment_id: str, config: DeploymentConfig, port:
             config.framework
         )
         
+<<<<<<< HEAD
         # Update status: Installing dependencies
         if config.dependencies:
             active_deployments[deployment_id]["status"] = "installing_dependencies"
@@ -259,12 +272,20 @@ async def deploy_model_async(deployment_id: str, config: DeploymentConfig, port:
         active_deployments[deployment_id]["message"] = "Starting model server..."
         await broadcast_status(deployment_id)
         
+=======
+        # Install dependencies if specified
+        if config.dependencies:
+            await install_dependencies(config.dependencies, deployment_dir)
+        
+        # Start the model server
+>>>>>>> parent of ca2a880 (Updated Code)
         process = await start_model_server(
             server_script,
             deployment_dir,
             deployment_id
         )
         
+<<<<<<< HEAD
         # Update status: Verifying
         active_deployments[deployment_id]["status"] = "verifying"
         active_deployments[deployment_id]["progress"] = 90
@@ -320,6 +341,39 @@ async def broadcast_status(deployment_id: str):
             "progress": active_deployments[deployment_id]["progress"],
             "message": active_deployments[deployment_id]["message"]
         })
+=======
+        # Store deployment info
+        active_deployments[deployment_id] = {
+            "deployment_id": deployment_id,
+            "model_name": config.model_name,
+            "port": port,
+            "pid": process.pid,
+            "status": "running",
+            "created_at": datetime.now().isoformat(),
+            "config": config.dict(),
+            "process": process
+        }
+        
+        # Broadcast status update
+        await broadcast_message({
+            "type": "deployment_started",
+            "deployment_id": deployment_id,
+            "model_name": config.model_name,
+            "port": port
+        })
+        
+        return {
+            "success": True,
+            "message": "Deployment started successfully",
+            "deployment_id": deployment_id,
+            "port": port,
+            "status": "running",
+            "endpoint": f"http://localhost:{port}"
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Deployment failed: {str(e)}")
+>>>>>>> parent of ca2a880 (Updated Code)
 
 
 @app.get("/api/deployments")
@@ -355,18 +409,24 @@ async def get_deployment(deployment_id: str):
     
     dep_info = active_deployments[deployment_id]
     
+<<<<<<< HEAD
     # Check process status if it exists
     is_running = False
     if dep_info["process"] is not None:
         is_running = dep_info["process"].poll() is None
         if not is_running and dep_info["status"] == "running":
             dep_info["status"] = "stopped"
+=======
+    # Check process status
+    is_running = dep_info["process"].poll() is None
+>>>>>>> parent of ca2a880 (Updated Code)
     
     return {
         "deployment_id": dep_info["deployment_id"],
         "model_name": dep_info["model_name"],
         "port": dep_info["port"],
         "pid": dep_info["pid"],
+<<<<<<< HEAD
         "status": dep_info["status"],
         "progress": dep_info.get("progress", 100 if dep_info["status"] == "running" else 0),
         "message": dep_info.get("message", ""),
@@ -399,6 +459,12 @@ async def get_deployment_status(deployment_id: str):
         "message": dep_info.get("message", ""),
         "port": dep_info["port"],
         "error": dep_info.get("error")
+=======
+        "status": "running" if is_running else "stopped",
+        "created_at": dep_info["created_at"],
+        "config": dep_info["config"],
+        "endpoint": f"http://localhost:{dep_info['port']}"
+>>>>>>> parent of ca2a880 (Updated Code)
     }
 
 

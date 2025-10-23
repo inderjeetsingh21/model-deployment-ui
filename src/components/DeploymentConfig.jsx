@@ -4,7 +4,6 @@ import { Server, Globe, Container } from 'lucide-react';
 const DeploymentConfig = ({ config, setConfig }) => {
   const handleChange = (field, value) => {
     setConfig({ ...config, [field]: value });
-    console.log('Deploy config:', config);
   };
 
   return (
