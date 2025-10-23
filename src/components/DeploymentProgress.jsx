@@ -1,238 +1,348 @@
-import React, { useEffect, useState } from 'react';
-import { CheckCircle, Loader, XCircle, ExternalLink, Copy } from 'lucide-react';
-import deploymentAPI from '../services/api';
+// src/components/DeploymentProgress.jsx
+// Real-time deployment progress component
 
-const DeploymentProgress = ({ config, deploymentId }) => {
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('initializing');
-  const [currentStage, setCurrentStage] = useState('');
-  const [logs, setLogs] = useState([]);
+import { useState, useEffect, useRef } from 'react';
+import { getDeployment } from '../services/api';
+
+function DeploymentProgress({ deploymentId, onComplete, onError }) {
+  const [status, setStatus] = useState({
+    status: 'initializing',
+    progress: 0,
+    message: 'Starting deployment...',
+  });
   const [error, setError] = useState(null);
-  const [endpointUrl, setEndpointUrl] = useState('');
-  const [ws, setWs] = useState(null);
+  const pollInterval = useRef(null);
+  const wsRef = useRef(null);
 
   useEffect(() => {
-    if (!deploymentId) return;
+    // Start polling for status
+    startPolling();
 
-    // Establish WebSocket connection
-    const websocket = deploymentAPI.createWebSocket(
-      deploymentId,
-      (data) => {
-        setProgress(data.progress || 0);
-        setStatus(data.status || 'running');
-        setCurrentStage(data.stage || '');
-        
-        if (data.log) {
-          setLogs((prev) => [...prev, data.log]);
-        }
-
-        if (data.status === 'completed') {
-          setEndpointUrl(data.endpoint || `http://localhost:${config.apiPort || 8001}`);
-        }
-
-        if (data.status === 'failed') {
-          setError(data.error || 'Deployment failed');
-        }
-      },
-      (error) => {
-        console.error('WebSocket error:', error);
-        setError('Connection lost to deployment service');
-      }
-    );
-
-    setWs(websocket);
+    // Try to connect via WebSocket for real-time updates
+    connectWebSocket();
 
     return () => {
-      if (websocket) {
-        websocket.close();
+      // Cleanup
+      if (pollInterval.current) {
+        clearInterval(pollInterval.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
       }
     };
   }, [deploymentId]);
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
+  const startPolling = () => {
+    // Poll every 2 seconds
+    pollInterval.current = setInterval(async () => {
+      try {
+        const data = await getDeployment(deploymentId);
+        
+        setStatus({
+          status: data.status,
+          progress: data.progress || 0,
+          message: data.message || '',
+        });
+
+        // Check if completed
+        if (data.status === 'running') {
+          // Success!
+          clearInterval(pollInterval.current);
+          if (onComplete) {
+            onComplete(data);
+          }
+        } else if (data.status === 'failed') {
+          // Failed
+          clearInterval(pollInterval.current);
+          setError(data.error || 'Deployment failed');
+          if (onError) {
+            onError(data.error);
+          }
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+        // Don't stop polling on error, might be temporary
+      }
+    }, 2000); // Poll every 2 seconds
   };
 
-  const getStageIcon = () => {
-    if (status === 'completed') {
-      return <CheckCircle size={24} color="#28a745" />;
-    } else if (status === 'failed') {
-      return <XCircle size={24} color="#dc3545" />;
-    } else {
-      return <Loader size={24} className="loading-spinner" />;
+  const connectWebSocket = () => {
+    try {
+      const wsUrl = 'ws://localhost:8000/ws';
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected for deployment updates');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Check if this message is for our deployment
+          if (data.deployment_id === deploymentId) {
+            if (data.type === 'status_update') {
+              setStatus({
+                status: data.status,
+                progress: data.progress,
+                message: data.message,
+              });
+            } else if (data.type === 'deployment_completed') {
+              // Deployment completed!
+              setStatus({
+                status: 'running',
+                progress: 100,
+                message: 'Deployment successful',
+              });
+              
+              if (onComplete) {
+                onComplete(data);
+              }
+            } else if (data.type === 'deployment_failed') {
+              setError(data.error);
+              if (onError) {
+                onError(data.error);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('WebSocket message parse error:', err);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        // Polling will continue as fallback
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket closed');
+      };
+
+      wsRef.current = ws;
+    } catch (err) {
+      console.error('WebSocket connection error:', err);
+      // Polling will continue as fallback
     }
   };
 
-  const curlExample = `curl -X POST "${endpointUrl}/predict" \\
-  -H "Content-Type: application/json" \\
-  -d '{"input_text": "Hello, world!", "max_length": 512}'`;
+  const getStatusColor = () => {
+    switch (status.status) {
+      case 'running':
+        return '#28a745';
+      case 'failed':
+        return '#dc3545';
+      case 'initializing':
+      case 'creating_directory':
+      case 'creating_server':
+      case 'installing_dependencies':
+      case 'starting_server':
+      case 'verifying':
+        return '#007bff';
+      default:
+        return '#6c757d';
+    }
+  };
 
-  const pythonExample = `import requests
+  const getStatusIcon = () => {
+    switch (status.status) {
+      case 'running':
+        return '✓';
+      case 'failed':
+        return '✗';
+      default:
+        return '⋯';
+    }
+  };
 
-response = requests.post(
-    "${endpointUrl}/predict",
-    json={"input_text": "Hello, world!", "max_length": 512}
-)
-print(response.json())`;
-
-  return (
-    <div className="deployment-progress">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-        {getStageIcon()}
-        <div>
-          <h2 style={{ margin: 0 }}>
-            {status === 'completed' ? 'Deployment Complete!' : 
-             status === 'failed' ? 'Deployment Failed' : 
-             'Deploying Model...'}
-          </h2>
-          <p style={{ color: '#6c757d', margin: '0.25rem 0 0 0' }}>
-            {currentStage || 'Starting deployment process'}
-          </p>
+  if (error) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.errorBox}>
+          <div style={styles.errorIcon}>✗</div>
+          <h3>Deployment Failed</h3>
+          <p>{error}</p>
+          <details style={styles.details}>
+            <summary>Troubleshooting</summary>
+            <ul>
+              <li>Check backend logs: <code>tail -f logs/{deploymentId}.log</code></li>
+              <li>Verify model file is valid</li>
+              <li>Check system resources</li>
+              <li>Try a different port</li>
+            </ul>
+          </details>
         </div>
       </div>
+    );
+  }
 
-      {error && (
-        <div className="error-message">
-          <strong>Error:</strong> {error}
+  return (
+    <div style={styles.container}>
+      <div style={styles.card}>
+        <div style={styles.header}>
+          <span style={{ ...styles.icon, color: getStatusColor() }}>
+            {getStatusIcon()}
+          </span>
+          <h3>Deploying Model</h3>
         </div>
-      )}
 
-      {status !== 'failed' && (
-        <div className="progress-container">
-          <div className="progress-bar-fill">
-            <div className="progress-fill" style={{ width: `${progress}%` }}>
-              {progress}%
-            </div>
+        <div style={styles.progressContainer}>
+          <div style={styles.progressBar}>
+            <div
+              style={{
+                ...styles.progressFill,
+                width: `${status.progress}%`,
+                backgroundColor: getStatusColor(),
+              }}
+            />
           </div>
-
-          {status !== 'completed' && (
-            <div className="progress-stage">
-              <h4>Current Stage: {currentStage || 'Initializing'}</h4>
-              <p style={{ color: '#6c757d', fontSize: '0.9rem' }}>
-                Please wait while we set up your deployment...
-              </p>
-            </div>
-          )}
+          <div style={styles.progressText}>{status.progress}%</div>
         </div>
-      )}
 
-      {logs.length > 0 && (
-        <div style={{ marginTop: '2rem' }}>
-          <h3>Deployment Logs</h3>
-          <div className="log-output">
-            <pre>
-              {logs.map((log, idx) => (
-                <div key={idx}>{log}</div>
-              ))}
-            </pre>
+        <div style={styles.statusInfo}>
+          <div style={styles.statusLabel}>Status:</div>
+          <div style={{ ...styles.statusValue, color: getStatusColor() }}>
+            {formatStatus(status.status)}
           </div>
         </div>
-      )}
 
-      {status === 'completed' && endpointUrl && (
-        <div style={{ marginTop: '2rem' }}>
-          <div className="success-message">
-            <CheckCircle size={20} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle' }} />
-            <strong>Success!</strong> Your model is now deployed and ready to use.
-          </div>
-
-          <div className="endpoint-card">
-            <h3>API Endpoint</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div className="endpoint-url" style={{ flex: 1 }}>
-                {endpointUrl}
-              </div>
-              <button
-                className="btn btn-secondary"
-                onClick={() => copyToClipboard(endpointUrl)}
-                style={{ padding: '0.5rem 1rem' }}
-              >
-                <Copy size={16} />
-              </button>
-              <a
-                href={`${endpointUrl}/docs`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary"
-                style={{ padding: '0.5rem 1rem', textDecoration: 'none' }}
-              >
-                <ExternalLink size={16} />
-              </a>
-            </div>
-
-            <div style={{ marginTop: '1.5rem' }}>
-              <h4>Test Your API</h4>
-              
-              <div style={{ marginTop: '1rem' }}>
-                <strong>cURL:</strong>
-                <div className="code-block" style={{ position: 'relative' }}>
-                  <button
-                    onClick={() => copyToClipboard(curlExample)}
-                    style={{
-                      position: 'absolute',
-                      top: '0.5rem',
-                      right: '0.5rem',
-                      background: '#667eea',
-                      border: 'none',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      color: 'white',
-                    }}
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <pre>{curlExample}</pre>
-                </div>
-              </div>
-
-              <div style={{ marginTop: '1rem' }}>
-                <strong>Python:</strong>
-                <div className="code-block" style={{ position: 'relative' }}>
-                  <button
-                    onClick={() => copyToClipboard(pythonExample)}
-                    style={{
-                      position: 'absolute',
-                      top: '0.5rem',
-                      right: '0.5rem',
-                      background: '#667eea',
-                      border: 'none',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      color: 'white',
-                    }}
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <pre>{pythonExample}</pre>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '1.5rem' }}>
-              <h4>Available Endpoints:</h4>
-              <ul style={{ marginLeft: '1.5rem', color: '#6c757d' }}>
-                <li><code>POST /predict</code> - Make predictions</li>
-                <li><code>GET /health</code> - Health check</li>
-                <li><code>GET /docs</code> - Interactive API documentation</li>
-                {config.enableMetrics && <li><code>GET /metrics</code> - Prometheus metrics</li>}
-              </ul>
-            </div>
-          </div>
-
-          <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-            <button
-              className="btn btn-primary"
-              onClick={() => window.location.reload()}
-            >
-              Deploy Another Model
-            </button>
-          </div>
+        <div style={styles.messageBox}>
+          <div style={styles.messageIcon}>ℹ️</div>
+          <div style={styles.messageText}>{status.message}</div>
         </div>
-      )}
+
+        <div style={styles.deploymentId}>
+          Deployment ID: <code>{deploymentId}</code>
+        </div>
+
+        {status.status === 'running' && (
+          <div style={styles.successBox}>
+            <strong>🎉 Deployment Successful!</strong>
+            <p>Your model is now running and ready to serve predictions.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
+}
+
+const formatStatus = (status) => {
+  const statusMap = {
+    initializing: 'Initializing',
+    creating_directory: 'Creating Directory',
+    creating_server: 'Creating Server',
+    installing_dependencies: 'Installing Dependencies',
+    starting_server: 'Starting Server',
+    verifying: 'Verifying',
+    running: 'Running',
+    failed: 'Failed',
+    stopped: 'Stopped',
+  };
+  return statusMap[status] || status;
+};
+
+const styles = {
+  container: {
+    maxWidth: '600px',
+    margin: '20px auto',
+    padding: '20px',
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    padding: '24px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '24px',
+  },
+  icon: {
+    fontSize: '32px',
+    fontWeight: 'bold',
+  },
+  progressContainer: {
+    marginBottom: '20px',
+  },
+  progressBar: {
+    width: '100%',
+    height: '24px',
+    backgroundColor: '#e9ecef',
+    borderRadius: '12px',
+    overflow: 'hidden',
+    marginBottom: '8px',
+  },
+  progressFill: {
+    height: '100%',
+    transition: 'width 0.3s ease',
+    borderRadius: '12px',
+  },
+  progressText: {
+    textAlign: 'center',
+    fontSize: '14px',
+    color: '#6c757d',
+    fontWeight: 'bold',
+  },
+  statusInfo: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '16px',
+    padding: '12px',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '4px',
+  },
+  statusLabel: {
+    fontWeight: 'bold',
+  },
+  statusValue: {
+    fontWeight: 'bold',
+  },
+  messageBox: {
+    display: 'flex',
+    gap: '12px',
+    padding: '12px',
+    backgroundColor: '#e7f3ff',
+    borderRadius: '4px',
+    marginBottom: '16px',
+  },
+  messageIcon: {
+    fontSize: '20px',
+  },
+  messageText: {
+    flex: 1,
+    color: '#0056b3',
+  },
+  deploymentId: {
+    fontSize: '12px',
+    color: '#6c757d',
+    textAlign: 'center',
+  },
+  successBox: {
+    marginTop: '16px',
+    padding: '16px',
+    backgroundColor: '#d4edda',
+    border: '1px solid #c3e6cb',
+    borderRadius: '4px',
+    color: '#155724',
+  },
+  errorBox: {
+    padding: '24px',
+    backgroundColor: '#f8d7da',
+    border: '1px solid #f5c6cb',
+    borderRadius: '8px',
+    color: '#721c24',
+    textAlign: 'center',
+  },
+  errorIcon: {
+    fontSize: '48px',
+    marginBottom: '16px',
+  },
+  details: {
+    marginTop: '16px',
+    textAlign: 'left',
+  },
 };
 
 export default DeploymentProgress;

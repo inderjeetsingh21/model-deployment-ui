@@ -1,31 +1,16 @@
-// src/services/api.js - Complete configurable API service
+// src/services/api.js
+// Updated API service with deployment status polling
+
 import axios from 'axios';
 
-// Configuration from environment variables
-const API_BASE_URL = import.meta.env.VITE_API_URL;
-const API_PREFIX = import.meta.env.VITE_API_PREFIX;
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_PREFIX = import.meta.env.VITE_API_PREFIX || '/api';
 
-// Endpoints configuration
-const ENDPOINTS = {
-  health: import.meta.env.VITE_ENDPOINT_HEALTH || '/health',
-  uploadModel: import.meta.env.VITE_ENDPOINT_UPLOAD || `${API_PREFIX}/upload-model`,
-  deploy: import.meta.env.VITE_ENDPOINT_DEPLOY || `${API_PREFIX}/deploy`,
-  deployments: import.meta.env.VITE_ENDPOINT_DEPLOYMENTS || `${API_PREFIX}/deployments`,
-  systemInfo: import.meta.env.VITE_ENDPOINT_SYSTEM_INFO || `${API_PREFIX}/system/info`,
-  websocket: import.meta.env.VITE_ENDPOINT_WS || '/ws',
-};
+console.log('API Configuration:', { API_BASE_URL, API_PREFIX });
 
-// Debug log
-console.log('=== API Configuration ===');
-console.log('Base URL:', API_BASE_URL);
-console.log('API Prefix:', API_PREFIX);
-console.log('Endpoints:', ENDPOINTS);
-console.log('========================');
-
-// Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000,  //30000 before
+  timeout: 120000, // 2 minutes timeout
   headers: {
     'Content-Type': 'application/json',
   }
@@ -34,15 +19,11 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    const fullUrl = `${config.baseURL}${config.url}`;
-    console.log(`[API Request] ${config.method.toUpperCase()} ${fullUrl}`);
-    if (config.data) {
-      console.log('[API Request Data]', config.data);
-    }
+    console.log(`[API] ${config.method.toUpperCase()} ${config.url}`);
     return config;
   },
   (error) => {
-    console.error('[API Request Error]', error);
+    console.error('[API] Request Error:', error);
     return Promise.reject(error);
   }
 );
@@ -50,15 +31,12 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
   (response) => {
-    console.log(`[API Response] ${response.status}`, response.data);
+    console.log(`[API] Response ${response.status}:`, response.data);
     return response;
   },
   (error) => {
-    const fullUrl = error.config ? `${error.config.baseURL}${error.config.url}` : 'unknown';
-    console.error('[API Response Error]', {
-      url: fullUrl,
+    console.error('[API] Response Error:', {
       status: error.response?.status,
-      statusText: error.response?.statusText,
       data: error.response?.data,
       message: error.message,
     });
@@ -66,194 +44,154 @@ api.interceptors.response.use(
   }
 );
 
-// API Functions
-
 /**
  * Health check
  */
 export const healthCheck = async () => {
-  try {
-    const response = await api.get(ENDPOINTS.health);
-    return response.data;
-  } catch (error) {
-    console.error('Health check failed:', error);
-    throw error;
-  }
+  const response = await api.get('/health');
+  return response.data;
 };
 
 /**
  * Upload model file
- * @param {File} file - Model file to upload
- * @param {string} modelName - Optional model name
  */
 export const uploadModel = async (file, modelName) => {
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (modelName) {
-      formData.append('model_name', modelName);
-    }
-
-    console.log(`[Upload] File: ${file.name}, Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
-
-    const response = await api.post(ENDPOINTS.uploadModel, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      timeout: 120000, // 2 minutes for large files
-      onUploadProgress: (progressEvent) => {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        console.log(`[Upload Progress] ${percentCompleted}%`);
-      },
-    });
-
-    return response.data;
-  } catch (error) {
-    console.error('Upload model failed:', error);
-    throw error;
+  const formData = new FormData();
+  formData.append('file', file);
+  if (modelName) {
+    formData.append('model_name', modelName);
   }
+
+  const response = await api.post(`${API_PREFIX}/upload-model`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    timeout: 300000, // 5 minutes for file upload
+  });
+
+  return response.data;
 };
 
 /**
- * Deploy model
- * @param {object} config - Deployment configuration
+ * Deploy model (async - returns immediately with deployment ID)
  */
 export const deployModel = async (config) => {
-  try {
-    // Normalize config to match backend expectations
-    const deployConfig = {
-      // model_name: config.model_name || config.modelName,
-      // api_type: config.api_type || config.apiType || 'REST',
-      // port: parseInt(config.port) || 8001,
-      // workers: parseInt(config.workers) || 4,
-      // target: config.target || 'Local Process',
-      // framework: config.framework || 'pytorch',
-      // dependencies: Array.isArray(config.dependencies) ? config.dependencies : [],
+  const deployConfig = {
+    // model_name: config.model_name || config.modelName,
+    // api_type: config.api_type || config.apiType || 'REST',
+    // port: parseInt(config.port) || 8001,
+    // workers: parseInt(config.workers) || 4,
+    // target: config.target || 'Local Process',
+    // framework: config.framework || 'pytorch',
+    // dependencies: Array.isArray(config.dependencies) ? config.dependencies : [],
 
-      model_name: config.deploymentName,
-      api_type: config.apiType.toUpperCase(),
-      port: parseInt(config.apiPort, 10),
-      workers: parseInt(config.workers, 10),
-      target: config.deploymentTarget === 'local' ? 'Local Process' : 'Docker',
-      framework: 'pytorch', // or extract dynamically
-      dependencies: config.additionalDeps?.length ? config.additionalDeps : ['torch'],
+    model_name: config.deploymentName,
+    api_type: config.apiType.toUpperCase(),
+    port: parseInt(config.apiPort, 10),
+    workers: parseInt(config.workers, 10),
+    target: config.deploymentTarget === 'local' ? 'Local Process' : 'Docker',
+    framework: 'pytorch', // or extract dynamically
+    dependencies: config.additionalDeps?.length ? config.additionalDeps : ['torch'],
+  };
 
-    };
+  const response = await api.post(`${API_PREFIX}/deploy`, deployConfig, {
+    timeout: 10000, // Short timeout since it returns immediately
+  });
 
-    console.log('[Deploy] Configuration:', deployConfig);
+  return response.data;
+};
 
-    const response = await api.post(ENDPOINTS.deploy, deployConfig);
-    return response.data;
-  } catch (error) {
-    console.error('Deploy model failed:', error);
-    
-    // Enhanced error logging for 422 errors
-    if (error.response?.status === 422) {
-      console.error('[Deploy] Validation Error Details:', {
-        errors: error.response.data?.detail,
-        sentConfig: config,
-      });
-    }
-    
-    throw error;
-  }
+/**
+ * Get deployment details (full info)
+ */
+export const getDeployment = async (deploymentId) => {
+  const response = await api.get(`${API_PREFIX}/deployments/${deploymentId}`);
+  return response.data;
+};
+
+/**
+ * Get deployment status (lightweight for polling)
+ */
+export const getDeploymentStatus = async (deploymentId) => {
+  const response = await api.get(`${API_PREFIX}/deployments/${deploymentId}/status`);
+  return response.data;
 };
 
 /**
  * Get all deployments
  */
 export const getDeployments = async () => {
-  try {
-    const response = await api.get(ENDPOINTS.deployments);
-    return response.data;
-  } catch (error) {
-    console.error('Get deployments failed:', error);
-    throw error;
-  }
-};
-
-/**
- * Get specific deployment
- * @param {string} deploymentId - Deployment ID
- */
-export const getDeployment = async (deploymentId) => {
-  try {
-    const response = await api.get(`${ENDPOINTS.deployments}/${deploymentId}`);
-    return response.data;
-  } catch (error) {
-    console.error('Get deployment failed:', error);
-    throw error;
-  }
+  const response = await api.get(`${API_PREFIX}/deployments`);
+  return response.data;
 };
 
 /**
  * Stop deployment
- * @param {string} deploymentId - Deployment ID
  */
 export const stopDeployment = async (deploymentId) => {
-  try {
-    const response = await api.delete(`${ENDPOINTS.deployments}/${deploymentId}`);
-    return response.data;
-  } catch (error) {
-    console.error('Stop deployment failed:', error);
-    throw error;
-  }
+  const response = await api.delete(`${API_PREFIX}/deployments/${deploymentId}`);
+  return response.data;
 };
 
 /**
  * Get system information
  */
 export const getSystemInfo = async () => {
-  try {
-    const response = await api.get(ENDPOINTS.systemInfo);
-    return response.data;
-  } catch (error) {
-    console.error('Get system info failed:', error);
-    throw error;
-  }
+  const response = await api.get(`${API_PREFIX}/system/info`);
+  return response.data;
 };
 
 /**
- * Create WebSocket connection
+ * Create WebSocket connection for real-time updates
  */
 export const createWebSocket = () => {
   const wsProtocol = API_BASE_URL.startsWith('https') ? 'wss' : 'ws';
   const wsBaseUrl = API_BASE_URL.replace(/^https?:/, wsProtocol + ':');
-  const wsUrl = `${wsBaseUrl}${ENDPOINTS.websocket}`;
+  const wsUrl = `${wsBaseUrl}/ws`;
   
   console.log('[WebSocket] Connecting to:', wsUrl);
-  
   return new WebSocket(wsUrl);
 };
 
 /**
- * Test connection to backend
+ * Poll deployment status until completion
+ * @param {string} deploymentId - Deployment ID
+ * @param {function} onUpdate - Callback for status updates
+ * @param {number} interval - Polling interval in ms (default: 2000)
  */
-export const testConnection = async () => {
-  try {
-    console.log('[Test] Testing backend connection...');
-    const health = await healthCheck();
-    console.log('[Test] Backend is healthy:', health);
-    return { success: true, data: health };
-  } catch (error) {
-    console.error('[Test] Backend connection failed:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      details: {
-        baseUrl: API_BASE_URL,
-        endpoint: ENDPOINTS.health,
-        fullUrl: `${API_BASE_URL}${ENDPOINTS.health}`
+export const pollDeploymentStatus = (deploymentId, onUpdate, interval = 2000) => {
+  let pollInterval;
+  
+  const poll = async () => {
+    try {
+      const status = await getDeploymentStatus(deploymentId);
+      
+      if (onUpdate) {
+        onUpdate(status);
       }
-    };
-  }
-};
-
-// Export configuration for debugging
-export const API_CONFIG = {
-  baseUrl: API_BASE_URL,
-  prefix: API_PREFIX,
-  endpoints: ENDPOINTS,
+      
+      // Stop polling if deployment is complete or failed
+      if (status.status === 'running' || status.status === 'failed') {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+        }
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
+      // Continue polling even on errors
+    }
+  };
+  
+  // Start polling
+  poll(); // Initial call
+  pollInterval = setInterval(poll, interval);
+  
+  // Return cleanup function
+  return () => {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+    }
+  };
 };
 
 export default api;
