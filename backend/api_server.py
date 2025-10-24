@@ -11,7 +11,8 @@ from typing import Dict, Any, Optional, List
 import uvicorn
 
 from .config import config
-from .deployment_service import deployment_service
+from .deployment_service import deployment_service, router
+from fastapi import FastAPI
 
 # Configure logging
 logging.basicConfig(
@@ -26,6 +27,8 @@ app = FastAPI(
     description="API for deploying and managing PyTorch models from HuggingFace Hub",
     version="2.0.0"
 )
+
+app.include_router(router, prefix="/api")
 
 # Configure CORS
 app.add_middleware(

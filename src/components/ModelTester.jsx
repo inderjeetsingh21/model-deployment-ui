@@ -1,297 +1,378 @@
-import React, { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { Send, Image, Video, FileText, ArrowLeft, Loader } from 'lucide-react'
-import axios from 'axios'
+import React, { useState } from 'react';
+import axios from 'axios';
+import { Send, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
-export default function ModelTester() {
-  const { deploymentId } = useParams()
-  const navigate = useNavigate()
-  
-  const [modelInfo, setModelInfo] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [inputText, setInputText] = useState('')
-  const [inputImage, setInputImage] = useState(null)
-  const [result, setResult] = useState(null)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [error, setError] = useState(null)
-  
-  useEffect(() => {
-    fetchModelInfo()
-  }, [deploymentId])
-  
-  const fetchModelInfo = async () => {
-    try {
-      const response = await axios.get(`/api/v1/deployments/${deploymentId}`)
-      setModelInfo(response.data)
-      setLoading(false)
-    } catch (err) {
-      setError('Failed to load model information')
-      setLoading(false)
+const ModelTester = () => {
+  const [modelName, setModelName] = useState('openai-community/gpt2-large');
+  const [inputText, setInputText] = useState('');
+  const [output, setOutput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [maxLength, setMaxLength] = useState(100);
+  const [temperature, setTemperature] = useState(0.7);
+
+  const handleTestModel = async () => {
+    if (!inputText.trim()) {
+      setError('Please enter some input text');
+      return;
     }
-  }
-  
-  const handleTest = async () => {
-    setIsGenerating(true)
-    setError(null)
-    setResult(null)
-    
+
+    setLoading(true);
+    setError(null);
+    setOutput('');
+
     try {
-      let requestData = {}
+      // Make sure to use the correct backend URL
+      const response = await axios.post('http://localhost:8000/api/test-model', {
+        model_name: modelName,
+        input_text: inputText,
+        max_length: maxLength,
+        temperature: temperature
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000 // 60 second timeout for model inference
+      });
+
+      if (response.data && response.data.output) {
+        setOutput(response.data.output);
+      } else {
+        setError('No output received from model');
+      }
+    } catch (err) {
+      console.error('Error testing model:', err);
       
-      // Determine input based on model type
-      if (modelInfo.model_type === 'nlp' || modelInfo.model_type === 'text') {
-        requestData = { text: inputText }
-      } else if (modelInfo.model_type === 'text-to-image') {
-        requestData = { prompt: inputText }
-      } else if (modelInfo.model_type === 'text-to-video') {
-        requestData = { prompt: inputText }
-      } else if (modelInfo.model_type === 'image-to-text') {
-        // For image input models
-        requestData = { image: inputImage }
+      let errorMessage = 'Failed to test model';
+      
+      if (err.response) {
+        // Server responded with error
+        errorMessage = err.response.data?.detail || err.response.statusText || errorMessage;
+      } else if (err.request) {
+        // Request made but no response
+        errorMessage = 'No response from server. Is the backend running?';
+      } else {
+        // Error setting up request
+        errorMessage = err.message;
       }
       
-      const response = await axios.post(
-        `/api/v1/deployments/${deploymentId}/inference`,
-        requestData
-      )
-      
-      setResult(response.data)
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Inference failed. Please try again.')
+      setError(errorMessage);
     } finally {
-      setIsGenerating(false)
+      setLoading(false);
     }
-  }
-  
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setInputImage(reader.result)
-      }
-      reader.readAsDataURL(file)
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleTestModel();
     }
-  }
-  
-  const renderInputArea = () => {
-    if (!modelInfo) return null
-    
-    const modelType = modelInfo.model_type
-    
-    if (modelType === 'nlp' || modelType === 'text' || 
-        modelType === 'text-to-image' || modelType === 'text-to-video') {
-      return (
-        <div className="input-section">
-          <label className="input-label">
-            <FileText size={20} />
-            {modelType === 'text-to-image' ? 'Image Prompt' : 
-             modelType === 'text-to-video' ? 'Video Prompt' : 
-             'Input Text'}
-          </label>
-          <textarea
-            className="test-textarea"
-            placeholder={
-              modelType === 'text-to-image' ? 'Describe the image you want to generate...' :
-              modelType === 'text-to-video' ? 'Describe the video you want to generate...' :
-              'Enter your text here...'
-            }
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            rows={6}
-          />
-        </div>
-      )
-    } else if (modelType === 'image-to-text' || modelType === 'cv') {
-      return (
-        <div className="input-section">
-          <label className="input-label">
-            <Image size={20} />
-            Upload Image
-          </label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="file-input"
-          />
-          {inputImage && (
-            <div className="image-preview">
-              <img src={inputImage} alt="Preview" />
-            </div>
-          )}
-        </div>
-      )
-    }
-    
-    return (
-      <div className="input-section">
-        <label className="input-label">
-          <FileText size={20} />
-          Input
-        </label>
-        <textarea
-          className="test-textarea"
-          placeholder="Enter your input..."
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          rows={6}
-        />
-      </div>
-    )
-  }
-  
-  const renderResult = () => {
-    if (!result) return null
-    
-    const modelType = modelInfo?.model_type
-    
-    if (modelType === 'text-to-image') {
-      // For image generation models
-      return (
-        <div className="result-section">
-          <h3 className="result-title">Generated Image</h3>
-          {result.result?.image_url ? (
-            <div className="generated-image">
-              <img src={result.result.image_url} alt="Generated" />
-            </div>
-          ) : (
-            <div className="result-output">
-              <pre>{JSON.stringify(result, null, 2)}</pre>
-            </div>
-          )}
-        </div>
-      )
-    } else if (modelType === 'text-to-video') {
-      // For video generation models
-      return (
-        <div className="result-section">
-          <h3 className="result-title">Generated Video</h3>
-          {result.result?.video_url ? (
-            <div className="generated-video">
-              <video controls src={result.result.video_url} />
-            </div>
-          ) : (
-            <div className="result-output">
-              <pre>{JSON.stringify(result, null, 2)}</pre>
-            </div>
-          )}
-        </div>
-      )
-    } else {
-      // For text models and other types
-      return (
-        <div className="result-section">
-          <h3 className="result-title">Result</h3>
-          <div className="result-output">
-            {result.result?.generated_text && (
-              <div className="generated-text">
-                <strong>Generated Text:</strong>
-                <p>{result.result.generated_text}</p>
-              </div>
-            )}
-            {result.result?.output && (
-              <div className="output-text">
-                <p>{result.result.output}</p>
-              </div>
-            )}
-            {!result.result?.generated_text && !result.result?.output && (
-              <pre>{JSON.stringify(result, null, 2)}</pre>
-            )}
-          </div>
-        </div>
-      )
-    }
-  }
-  
-  if (loading) {
-    return (
-      <div className="model-tester loading">
-        <Loader className="spinning" size={48} />
-        <p>Loading model information...</p>
-      </div>
-    )
-  }
-  
-  if (error && !modelInfo) {
-    return (
-      <div className="model-tester error">
-        <p>{error}</p>
-        <button onClick={() => navigate('/')} className="btn-primary">
-          Back to Home
-        </button>
-      </div>
-    )
-  }
-  
+  };
+
   return (
-    <div className="model-tester">
-      <div className="tester-container">
-        {/* Header */}
-        <div className="tester-header">
-          <button onClick={() => navigate('/')} className="back-button">
-            <ArrowLeft size={20} />
-            Back
-          </button>
-          <h1>Test Your Model</h1>
+    <div className="model-tester-container">
+      <div className="model-tester-card">
+        <div className="model-tester-header">
+          <h2>Model Inference Tester</h2>
+          <p>Test your deployed Hugging Face model with custom inputs</p>
         </div>
-        
-        {/* Model Info */}
-        <div className="model-info-card">
-          <h2>{modelInfo?.model_id}</h2>
-          <div className="info-badges">
-            <span className="badge">{modelInfo?.model_type}</span>
-            <span className="badge status-running">{modelInfo?.status}</span>
-            <span className="badge">{modelInfo?.model_info?.device}</span>
+
+        <div className="model-tester-form">
+          {/* Model Selection */}
+          <div className="form-group">
+            <label htmlFor="model-select">Model</label>
+            <input
+              id="model-select"
+              type="text"
+              value={modelName}
+              onChange={(e) => setModelName(e.target.value)}
+              placeholder="e.g., openai-community/gpt2-large"
+              className="model-input"
+            />
           </div>
-        </div>
-        
-        {/* Input Area */}
-        <div className="test-area">
-          {renderInputArea()}
-          
+
+          {/* Advanced Settings */}
+          <div className="advanced-settings">
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="max-length">Max Length</label>
+                <input
+                  id="max-length"
+                  type="number"
+                  value={maxLength}
+                  onChange={(e) => setMaxLength(Number(e.target.value))}
+                  min="10"
+                  max="500"
+                  className="small-input"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="temperature">Temperature</label>
+                <input
+                  id="temperature"
+                  type="number"
+                  value={temperature}
+                  onChange={(e) => setTemperature(Number(e.target.value))}
+                  min="0.1"
+                  max="2.0"
+                  step="0.1"
+                  className="small-input"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Input Text */}
+          <div className="form-group">
+            <label htmlFor="input-text">Input Text</label>
+            <textarea
+              id="input-text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Enter your prompt here..."
+              rows={4}
+              className="text-input"
+              disabled={loading}
+            />
+          </div>
+
+          {/* Test Button */}
           <button
-            onClick={handleTest}
-            disabled={isGenerating || (!inputText && !inputImage)}
-            className="btn-primary test-button"
+            onClick={handleTestModel}
+            disabled={loading || !inputText.trim()}
+            className="test-button"
           >
-            {isGenerating ? (
+            {loading ? (
               <>
-                <Loader className="spinning" size={20} />
+                <Loader2 className="icon spinning" />
                 Generating...
               </>
             ) : (
               <>
-                <Send size={20} />
+                <Send className="icon" />
                 Test Model
               </>
             )}
           </button>
-        </div>
-        
-        {/* Error Display */}
-        {error && (
-          <div className="error-message">
-            <p>{error}</p>
-          </div>
-        )}
-        
-        {/* Result Display */}
-        {renderResult()}
-        
-        {/* API Info */}
-        {modelInfo && (
-          <div className="api-info">
-            <h3>API Endpoint</h3>
-            <div className="endpoint-box">
-              <code>{modelInfo.endpoint_url}</code>
+
+          {/* Error Display */}
+          {error && (
+            <div className="alert alert-error">
+              <AlertCircle className="icon" />
+              <div>
+                <strong>Error:</strong>
+                <p>{error}</p>
+              </div>
             </div>
-            <p className="api-note">
-              You can also call this endpoint directly from your applications using the examples provided in the deployment summary.
-            </p>
-          </div>
-        )}
+          )}
+
+          {/* Output Display */}
+          {output && !error && (
+            <div className="output-section">
+              <div className="output-header">
+                <CheckCircle2 className="icon success" />
+                <h3>Generated Output</h3>
+              </div>
+              <div className="output-content">
+                <pre>{output}</pre>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      <style jsx>{`
+        .model-tester-container {
+          padding: 2rem;
+          max-width: 900px;
+          margin: 0 auto;
+        }
+
+        .model-tester-card {
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          overflow: hidden;
+        }
+
+        .model-tester-header {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 2rem;
+        }
+
+        .model-tester-header h2 {
+          margin: 0 0 0.5rem 0;
+          font-size: 1.75rem;
+        }
+
+        .model-tester-header p {
+          margin: 0;
+          opacity: 0.9;
+        }
+
+        .model-tester-form {
+          padding: 2rem;
+        }
+
+        .form-group {
+          margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+          display: block;
+          font-weight: 600;
+          margin-bottom: 0.5rem;
+          color: #333;
+        }
+
+        .model-input,
+        .text-input,
+        .small-input {
+          width: 100%;
+          padding: 0.75rem;
+          border: 2px solid #e2e8f0;
+          border-radius: 8px;
+          font-size: 1rem;
+          transition: border-color 0.2s;
+        }
+
+        .model-input:focus,
+        .text-input:focus,
+        .small-input:focus {
+          outline: none;
+          border-color: #667eea;
+        }
+
+        .text-input {
+          resize: vertical;
+          font-family: 'Courier New', monospace;
+        }
+
+        .advanced-settings {
+          background: #f7fafc;
+          padding: 1rem;
+          border-radius: 8px;
+          margin-bottom: 1.5rem;
+        }
+
+        .form-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+        }
+
+        .small-input {
+          width: 100%;
+        }
+
+        .test-button {
+          width: 100%;
+          padding: 1rem;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .test-button:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .test-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .icon {
+          width: 20px;
+          height: 20px;
+        }
+
+        .icon.spinning {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        .alert {
+          padding: 1rem;
+          border-radius: 8px;
+          margin-top: 1.5rem;
+          display: flex;
+          gap: 1rem;
+        }
+
+        .alert-error {
+          background: #fee;
+          border: 1px solid #fcc;
+          color: #c33;
+        }
+
+        .alert strong {
+          display: block;
+          margin-bottom: 0.25rem;
+        }
+
+        .output-section {
+          margin-top: 2rem;
+          border-top: 2px solid #e2e8f0;
+          padding-top: 1.5rem;
+        }
+
+        .output-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+
+        .output-header h3 {
+          margin: 0;
+          color: #333;
+        }
+
+        .icon.success {
+          color: #48bb78;
+        }
+
+        .output-content {
+          background: #f7fafc;
+          border: 2px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 1.5rem;
+        }
+
+        .output-content pre {
+          margin: 0;
+          white-space: pre-wrap;
+          word-wrap: break-word;
+          font-family: 'Courier New', monospace;
+          font-size: 0.95rem;
+          line-height: 1.6;
+          color: #2d3748;
+        }
+      `}</style>
     </div>
-  )
-}
+  );
+};
+
+export default ModelTester;
