@@ -1,137 +1,162 @@
-import React from 'react';
-import { Database, Upload, Globe } from 'lucide-react';
+import React from 'react'
+import { Globe, FolderOpen, Upload } from 'lucide-react'
 
-const ModelSelection = ({ config, setConfig, onNext }) => {
-  const handleChange = (field, value) => {
-    setConfig({ ...config, [field]: value });
-  };
-
+export default function ModelSelection({ data, onUpdate }) {
   const modelSources = [
-    { id: 'huggingface', name: 'HuggingFace Hub', icon: Globe, description: 'Download from HuggingFace' },
-    { id: 'local', name: 'Local Path', icon: Database, description: 'Use local model files' },
-    { id: 'upload', name: 'Upload Model', icon: Upload, description: 'Upload your own model' }
-  ];
+    {
+      id: 'huggingface',
+      name: 'HuggingFace Hub',
+      icon: Globe,
+      description: 'Download from HuggingFace'
+    },
+    {
+      id: 'local',
+      name: 'Local Path',
+      icon: FolderOpen,
+      description: 'Use local model files'
+    },
+    {
+      id: 'upload',
+      name: 'Upload Model',
+      icon: Upload,
+      description: 'Upload your own model'
+    }
+  ]
 
   const modelTypes = [
-    { id: 'nlp', name: 'NLP/Text', description: 'BERT, GPT, T5, etc.' },
-    { id: 'vision', name: 'Computer Vision', description: 'ResNet, ViT, YOLO, etc.' },
-    { id: 'audio', name: 'Audio/Speech', description: 'Whisper, Wav2Vec, etc.' },
-    { id: 'multimodal', name: 'Multimodal', description: 'CLIP, Flamingo, etc.' }
-  ];
+    {
+      id: 'nlp',
+      name: 'NLP/Text',
+      description: 'BERT, GPT, T5, etc.'
+    },
+    {
+      id: 'cv',
+      name: 'Computer Vision',
+      description: 'ResNet, ViT, YOLO, etc.'
+    },
+    {
+      id: 'text-to-image',
+      name: 'Text to Image',
+      description: 'Stable Diffusion, DALL-E, etc.'
+    },
+    {
+      id: 'text-to-video',
+      name: 'Text to Video',
+      description: 'Video generation models'
+    }
+  ]
+
+  const handleSourceChange = (sourceId) => {
+    onUpdate({
+      model: { ...data.model, model_source: sourceId }
+    })
+  }
+
+  const handleModelIdChange = (e) => {
+    onUpdate({
+      model: { ...data.model, model_id: e.target.value }
+    })
+  }
+
+  const handleTypeChange = (typeId) => {
+    onUpdate({
+      model_type: typeId
+    })
+  }
+
+  const handleDeploymentNameChange = (e) => {
+    onUpdate({
+      deployment_name: e.target.value
+    })
+  }
 
   return (
-    <div className="step-content">
-      <h2>Model Configuration</h2>
-      <p style={{ color: '#6c757d', marginBottom: '2rem' }}>
-        Select your model source and type to begin deployment
-      </p>
+    <div className="model-selection">
+      <div className="section-header">
+        <h2>Model Configuration</h2>
+        <p className="section-description">Select your model source and type to begin deployment</p>
+      </div>
 
-      <div className="form-group">
-        <label>Model Source</label>
-        <div className="radio-group">
-          {modelSources.map((source) => (
-            <div
-              key={source.id}
-              className={`radio-option ${config.modelSource === source.id ? 'selected' : ''}`}
-              onClick={() => handleChange('modelSource', source.id)}
-            >
-              <input
-                type="radio"
-                name="modelSource"
-                value={source.id}
-                checked={config.modelSource === source.id}
-                onChange={() => {}}
-              />
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                  <source.icon size={20} />
-                  <strong>{source.name}</strong>
+      {/* Model Source */}
+      <div className="form-section">
+        <label className="form-label">Model Source</label>
+        <div className="source-options">
+          {modelSources.map((source) => {
+            const Icon = source.icon
+            return (
+              <div
+                key={source.id}
+                className={`source-option ${data.model.model_source === source.id ? 'selected' : ''}`}
+                onClick={() => handleSourceChange(source.id)}
+              >
+                <input
+                  type="radio"
+                  name="model_source"
+                  value={source.id}
+                  checked={data.model.model_source === source.id}
+                  onChange={() => {}}
+                />
+                <Icon className="source-icon" size={20} />
+                <div className="source-content">
+                  <div className="source-name">{source.name}</div>
+                  <div className="source-description">{source.description}</div>
                 </div>
-                <small style={{ color: '#6c757d' }}>{source.description}</small>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
-      {config.modelSource === 'huggingface' && (
-        <div className="form-group">
-          <label>Model ID</label>
-          <input
-            type="text"
-            placeholder="e.g., bert-base-uncased, gpt2, facebook/opt-125m"
-            value={config.modelId || ''}
-            onChange={(e) => handleChange('modelId', e.target.value)}
-          />
-          <small style={{ color: '#6c757d', display: 'block', marginTop: '0.5rem' }}>
-            Enter the HuggingFace model identifier
-          </small>
-        </div>
-      )}
+      {/* Model ID */}
+      <div className="form-section">
+        <label className="form-label">Model ID</label>
+        <input
+          type="text"
+          className="form-input"
+          placeholder="e.g., bert-base-uncased, gpt2, facebook/opt-125m"
+          value={data.model.model_id}
+          onChange={handleModelIdChange}
+        />
+        <p className="form-hint">Enter the HuggingFace model identifier</p>
+      </div>
 
-      {config.modelSource === 'local' && (
-        <div className="form-group">
-          <label>Local Model Path</label>
-          <input
-            type="text"
-            placeholder="/path/to/model"
-            value={config.modelPath || ''}
-            onChange={(e) => handleChange('modelPath', e.target.value)}
-          />
-        </div>
-      )}
-
-      {config.modelSource === 'upload' && (
-        <div className="form-group">
-          <label>Upload Model Files</label>
-          <input
-            type="file"
-            multiple
-            onChange={(e) => handleChange('modelFiles', e.target.files)}
-          />
-          <small style={{ color: '#6c757d', display: 'block', marginTop: '0.5rem' }}>
-            Upload model weights and configuration files
-          </small>
-        </div>
-      )}
-
-      <div className="form-group">
-        <label>Model Type</label>
-        <div className="radio-group">
+      {/* Model Type */}
+      <div className="form-section">
+        <label className="form-label">Model Type</label>
+        <div className="type-options">
           {modelTypes.map((type) => (
             <div
               key={type.id}
-              className={`radio-option ${config.modelType === type.id ? 'selected' : ''}`}
-              onClick={() => handleChange('modelType', type.id)}
+              className={`type-option ${data.model_type === type.id ? 'selected' : ''}`}
+              onClick={() => handleTypeChange(type.id)}
             >
               <input
                 type="radio"
-                name="modelType"
+                name="model_type"
                 value={type.id}
-                checked={config.modelType === type.id}
+                checked={data.model_type === type.id}
                 onChange={() => {}}
               />
-              <div>
-                <strong>{type.name}</strong>
-                <br />
-                <small style={{ color: '#6c757d' }}>{type.description}</small>
+              <div className="type-content">
+                <div className="type-name">{type.name}</div>
+                <div className="type-description">{type.description}</div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="form-group">
-        <label>Deployment Name</label>
+      {/* Deployment Name */}
+      <div className="form-section">
+        <label className="form-label">Deployment Name</label>
         <input
           type="text"
-          placeholder="my-model-deployment"
-          value={config.deploymentName || ''}
-          onChange={(e) => handleChange('deploymentName', e.target.value)}
+          className="form-input"
+          placeholder="my-model"
+          value={data.deployment_name}
+          onChange={handleDeploymentNameChange}
         />
       </div>
     </div>
-  );
-};
-
-export default ModelSelection;
+  )
+}

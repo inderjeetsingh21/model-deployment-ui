@@ -1,455 +1,423 @@
-# Model Deployment Interface - Complete Installation Guide
+# PyTorch Model Deployment Platform v2.0
 
-A complete, production-ready web interface for automated PyTorch model deployment on Linux.
+A production-ready web platform for automated deployment of PyTorch models from HuggingFace Hub with real-time progress tracking and comprehensive API support.
+
+![Platform Screenshot](screenshot.png)
+
+## 🎯 What This Platform Does
+
+This platform automates the entire process of deploying PyTorch models:
+
+### During Deployment:
+1. **Downloads** the model from HuggingFace Hub
+2. **Caches** model files locally for faster future access
+3. **Loads** the model into memory (GPU/CPU)
+4. **Creates** an inference API endpoint
+5. **Monitors** the entire process with real-time progress updates
+
+### After Deployment:
+- Your model is **running** and ready to accept inference requests
+- You get a **REST API endpoint** to send predictions
+- Complete **usage examples** in cURL and Python
+- Access to **API documentation** via Swagger UI
+- Ability to manage and monitor all deployed models
+
+## 🚀 Key Features
+
+- ✅ **No Timeout Issues** - Proper async handling with configurable timeouts
+- ✅ **Real-time Progress** - WebSocket-based progress updates
+- ✅ **Centralized Configuration** - All settings in `.env` file
+- ✅ **Clear Documentation** - Comprehensive guides and examples
+- ✅ **Multiple Model Types** - Support for NLP, Vision, Audio, and Multimodal
+- ✅ **Automatic Dependency Management** - No manual configuration needed
+- ✅ **Production Ready** - Error handling, logging, and monitoring
 
 ## 📋 Prerequisites
 
-### System Requirements
-- **OS**: Ubuntu 20.04+ / Debian 11+ / RHEL 8+ / CentOS 8+
-- **RAM**: Minimum 4GB, Recommended 8GB+
-- **Disk**: 20GB+ free space
-- **CPU**: 2+ cores recommended
-- **Network**: Internet connection for package downloads
-
-### Required Software
-- Node.js 18+ and npm
 - Python 3.9+
-- Git
+- Node.js 18+
+- 4GB+ RAM (8GB+ recommended)
+- 20GB+ free disk space
+- Internet connection for model downloads
 
----
+## 🛠️ Installation
 
-## 🚀 Complete Installation Guide
-
-### Step 1: Install System Dependencies
-
-#### For Ubuntu/Debian:
-```bash
-# Update system packages
-sudo apt update && sudo apt upgrade -y
-
-# Install Node.js 20.x
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Install Python and pip
-sudo apt install -y python3 python3-pip python3-venv
-
-# Install Git
-sudo apt install -y git
-
-# Install build tools
-sudo apt install -y build-essential
-
-# Verify installations
-node --version  # Should show v20.x.x
-npm --version   # Should show 10.x.x
-python3 --version  # Should show 3.9+
-```
-
-#### For RHEL/CentOS/Fedora:
-```bash
-# Install Node.js
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo dnf install -y nodejs
-
-# Install Python
-sudo dnf install -y python3 python3-pip
-
-# Install Git and build tools
-sudo dnf install -y git gcc gcc-c++ make
-
-# Verify installations
-node --version
-npm --version
-python3 --version
-```
-
-### Step 2: Clone or Download the Project
+### 1. Clone and Setup Backend
 
 ```bash
-# Navigate to your projects directory
-cd ~
-
-# If you have the project files already, skip this
-# Otherwise create the project directory
-mkdir model-deployment-ui
-cd model-deployment-ui
-
-# If files were provided separately, ensure all files are in this directory
-ls -la
-# You should see: package.json, vite.config.js, index.html, src/
-```
-
-### Step 3: Install Frontend Dependencies
-
-```bash
-# Install all npm packages
-npm install
-
-# This will install:
-# - React 18
-# - Vite (build tool)
-# - Axios (HTTP client)
-# - Lucide React (icons)
-```
-
-### Step 4: Start the Development Server
-
-```bash
-# Start the frontend (development mode)
-npm run dev
-
-# The server will start on http://localhost:3000
-# You should see output like:
-#   VITE v5.0.0  ready in 500 ms
-#   ➜  Local:   http://localhost:3000/
-#   ➜  Network: http://192.168.1.x:3000/
-```
-
-**Keep this terminal open!** The frontend is now running.
-
----
-
-## 🔧 Production Deployment
-
-### Option 1: Build for Production (Recommended)
-
-```bash
-# Build the production-ready static files
-npm run build
-
-# This creates a 'dist' folder with optimized files
-```
-
-#### Serve with Built-in Server
-```bash
-# Install serve globally
-sudo npm install -g serve
-
-# Serve the production build
-serve -s dist -l 3000
-
-# Or run as background service
-nohup serve -s dist -l 3000 > frontend.log 2>&1 &
-```
-
-#### Serve with Nginx (Professional Setup)
-
-1. **Install Nginx:**
-```bash
-# Ubuntu/Debian
-sudo apt install -y nginx
-
-# RHEL/CentOS
-sudo dnf install -y nginx
-```
-
-2. **Configure Nginx:**
-```bash
-sudo nano /etc/nginx/sites-available/model-deployment
-```
-
-Add this configuration:
-```nginx
-server {
-    listen 80;
-    server_name your-server-ip;
-    
-    root /home/$USER/model-deployment-ui/dist;
-    index index.html;
-    
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-    
-    # Proxy API requests to backend
-    location /api {
-        proxy_pass http://localhost:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-    
-    # WebSocket support
-    location /ws {
-        proxy_pass http://localhost:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "Upgrade";
-        proxy_set_header Host $host;
-    }
-}
-```
-
-3. **Enable and Start Nginx:**
-```bash
-# Enable the site
-sudo ln -s /etc/nginx/sites-available/model-deployment /etc/nginx/sites-enabled/
-
-# Test configuration
-sudo nginx -t
-
-# Restart Nginx
-sudo systemctl restart nginx
-sudo systemctl enable nginx
-
-# Check status
-sudo systemctl status nginx
-```
-
-4. **Configure Firewall:**
-```bash
-# Ubuntu/Debian (UFW)
-sudo ufw allow 80/tcp
-sudo ufw allow 8000/tcp
-sudo ufw enable
-
-# RHEL/CentOS (Firewalld)
-sudo firewall-cmd --permanent --add-port=80/tcp
-sudo firewall-cmd --permanent --add-port=8000/tcp
-sudo firewall-cmd --reload
-```
-
-### Option 2: Development Mode (Testing)
-
-```bash
-# Just run the dev server
-npm run dev
-```
-
----
-
-## 🔐 Running as a System Service
-
-Create a systemd service for auto-start on boot:
-
-### 1. Create Service File
-```bash
-sudo nano /etc/systemd/system/model-deployment-ui.service
-```
-
-### 2. Add Configuration
-```ini
-[Unit]
-Description=Model Deployment UI
-After=network.target
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/home/your-username/model-deployment-ui
-ExecStart=/usr/bin/serve -s dist -l 3000
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 3. Enable and Start Service
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable model-deployment-ui
-sudo systemctl start model-deployment-ui
-sudo systemctl status model-deployment-ui
-```
-
----
-
-## 🌐 Accessing the Interface
-
-### Local Access
-- Development: http://localhost:3000
-- Production: http://localhost:3000 (or port 80 with Nginx)
-
-### Remote Access
-- Replace `localhost` with your server's IP address
-- Example: http://192.168.1.100:3000
-
-### From Another Computer
-1. Get your server's IP: `ip addr show` or `hostname -I`
-2. Access: http://YOUR_SERVER_IP:3000
-
----
-
-## 📦 Project Structure
-
-```
-model-deployment-ui/
-├── package.json           # Dependencies and scripts
-├── vite.config.js        # Vite configuration
-├── index.html            # HTML entry point
-├── src/
-│   ├── main.jsx          # React entry point
-│   ├── App.jsx           # Main App component
-│   ├── components/       # React components
-│   │   ├── DeploymentWizard.jsx
-│   │   ├── ModelSelection.jsx
-│   │   ├── HardwareConfig.jsx
-│   │   ├── DependencyManager.jsx
-│   │   ├── DeploymentConfig.jsx
-│   │   ├── DeploymentSummary.jsx
-│   │   └── DeploymentProgress.jsx
-│   ├── services/         # API services
-│   │   └── api.js
-│   └── styles/          # CSS styles
-│       └── App.css
-└── dist/                # Production build (after npm run build)
-```
-
----
-
-## 🔧 Troubleshooting
-
-### Port Already in Use
-```bash
-# Find process using port 3000
-sudo lsof -i :3000
-
-# Kill the process
-sudo kill -9 <PID>
-```
-
-### Permission Denied
-```bash
-# Fix ownership
-sudo chown -R $USER:$USER ~/model-deployment-ui
-
-# Or run with sudo (not recommended)
-sudo npm run dev
-```
-
-### Module Not Found
-```bash
-# Clear cache and reinstall
-rm -rf node_modules package-lock.json
-npm install
-```
-
-### Cannot Connect to Backend
-```bash
-# Verify backend is running on port 8000
-curl http://localhost:8000/health
-
-# Check firewall
-sudo ufw status
-sudo firewall-cmd --list-all
-```
-
-### Build Fails
-```bash
-# Clear Vite cache
-rm -rf node_modules/.vite
-
-# Rebuild
-npm run build
-```
-
----
-
-## 📝 Available Scripts
-
-```bash
-npm run dev      # Start development server (hot reload)
-npm run build    # Build for production
-npm run preview  # Preview production build locally
-```
-
----
-
-## 🔗 Next Steps
-
-After the frontend is running, you need to set up the backend:
-
-1. **Install Backend Dependencies** (in a new terminal):
-```bash
-cd ~
-mkdir model-deployment-backend
-cd model-deployment-backend
+# Navigate to backend directory
+cd backend
 
 # Create virtual environment
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install FastAPI and dependencies
-pip install fastapi uvicorn websockets python-multipart
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy environment configuration
+cp ../.env.example ../.env
+
+# Edit .env file to customize settings (optional)
+nano ../.env
 ```
 
-2. **Start Backend Server**:
+### 2. Setup Frontend
+
 ```bash
-# The backend code should be in api_server.py
-python api_server.py
+# Navigate to project root
+cd ..
+
+# Install frontend dependencies
+npm install
+
+# Copy .env if not done
+cp .env.example .env
 ```
 
-3. **Verify Everything Works**:
-- Frontend: http://localhost:3000
-- Backend: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+### 3. Start the Services
 
----
+#### Start Backend (Terminal 1):
+```bash
+cd backend
+source venv/bin/activate
+python -m backend.api_server
+```
 
-## 📊 Resource Usage
+Backend will start on: `http://localhost:8000`
+API Docs available at: `http://localhost:8000/docs`
 
-**Development Mode:**
-- RAM: ~200MB
-- CPU: 2-5% (idle)
+#### Start Frontend (Terminal 2):
+```bash
+npm run dev
+```
 
-**Production Mode:**
-- RAM: ~50MB
-- CPU: <1% (idle)
+Frontend will start on: `http://localhost:3000`
 
----
+## 📚 Configuration Guide
 
-## 🆘 Support
+All configuration is centralized in the `.env` file. Here are the key settings:
 
-If you encounter issues:
+### Server Ports
+```env
+BACKEND_PORT=8000
+FRONTEND_PORT=3000
+```
 
-1. Check logs:
-   - Frontend: Terminal output
-   - Nginx: `/var/log/nginx/error.log`
-   - Service: `journalctl -u model-deployment-ui -f`
+### Storage Locations
+```env
+MODEL_STORAGE_PATH=./deployed_models
+TEMP_MODEL_PATH=./temp_models
+HUGGINGFACE_CACHE_DIR=./huggingface_cache
+```
 
-2. Verify all services are running:
-   ```bash
-   # Frontend
-   ps aux | grep serve
-   
-   # Backend
-   ps aux | grep uvicorn
-   
-   # Nginx
-   sudo systemctl status nginx
-   ```
+### Timeout Settings
+```env
+MAX_DOWNLOAD_TIMEOUT=1800  # 30 minutes for model download
+MODEL_INFERENCE_TIMEOUT=120  # 2 minutes for inference
+```
 
-3. Test connectivity:
-   ```bash
-   # Test frontend
-   curl http://localhost:3000
-   
-   # Test backend
-   curl http://localhost:8000/health
-   ```
+### Model Serving Ports
+```env
+MODEL_SERVE_PORT_START=8100
+MODEL_SERVE_PORT_END=8200
+```
 
----
+These settings control which ports are used for deployed models. Adjust based on your needs.
 
-## ✅ Installation Checklist
+## 🎓 How to Use the Platform
 
-- [ ] Node.js 18+ installed
-- [ ] Python 3.9+ installed
-- [ ] Project files downloaded/extracted
-- [ ] npm install completed successfully
-- [ ] npm run dev starts without errors
-- [ ] Can access http://localhost:3000
-- [ ] Backend API running on port 8000
-- [ ] WebSocket connection works
-- [ ] Firewall ports open (if accessing remotely)
+### Step-by-Step Deployment Guide
 
----
+#### 1. Access the Platform
+Open http://localhost:3000 in your browser
 
-## 🎉 Success!
+#### 2. Model Configuration (Step 1)
+- **Model Source**: Select "HuggingFace Hub"
+- **Model ID**: Enter a model identifier from HuggingFace
+  - Examples:
+    - `bert-base-uncased` (Text Classification)
+    - `gpt2` (Text Generation)
+    - `facebook/opt-125m` (Large Language Model)
+    - `distilbert-base-uncased-finetuned-sst-2-english` (Sentiment Analysis)
+- **Model Type**: Select the appropriate type (NLP/Text, Computer Vision, Audio, Multimodal)
+- **Deployment Name**: Give your deployment a unique name (e.g., `my-sentiment-model`)
 
-You should now have a fully functional model deployment interface running on your Linux system!
+#### 3. Hardware Configuration (Step 2)
+- Select compute device:
+  - **Auto**: Automatically detects and uses best available device
+  - **CUDA (GPU)**: Use NVIDIA GPU if available
+  - **CPU**: Use CPU for inference
 
-Access it at: **http://localhost:3000** (or your server IP)
+#### 4. Dependencies (Step 3)
+- All dependencies are automatically managed
+- No manual configuration required
+
+#### 5. Review Settings (Step 4)
+- Review all configuration before deployment
+
+#### 6. Summary and Deploy (Step 5)
+- Review complete deployment summary
+- Click "Deploy" to start the deployment
+
+#### 7. Monitor Progress
+- Watch real-time progress updates via WebSocket
+- See each deployment step as it completes:
+  1. Configuration validation
+  2. Model download from HuggingFace
+  3. Model loading
+  4. Pipeline creation
+  5. Server startup
+  6. Deployment complete!
+
+## 🧪 Testing Deployed Models
+
+Once your model is deployed, you have several ways to test it:
+
+### 1. Using cURL
+
+```bash
+# For NLP models
+curl -X POST http://localhost:8100/predict \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello, how are you?"}'
+
+# The exact endpoint URL is provided in the deployment result
+```
+
+### 2. Using Python
+
+```python
+import requests
+
+# Replace with your actual endpoint URL
+endpoint = "http://localhost:8100/predict"
+
+# For NLP models
+response = requests.post(
+    endpoint,
+    json={"text": "This product is amazing!"}
+)
+
+print(response.json())
+```
+
+### 3. Using the API Documentation
+
+1. Open http://localhost:8000/docs
+2. Find your deployment endpoint
+3. Click "Try it out"
+4. Enter test data
+5. Execute the request
+
+### 4. Using the Test Interface (Coming Soon)
+
+The platform provides a built-in test interface accessible after deployment.
+
+## 📖 Understanding Model Deployments
+
+### What Happens During Deployment?
+
+1. **Model Download**
+   - Platform connects to HuggingFace Hub
+   - Downloads model weights, configuration, and tokenizer
+   - Files are cached in `HUGGINGFACE_CACHE_DIR` (default: `./huggingface_cache`)
+   - Future deployments of the same model are much faster!
+
+2. **Model Loading**
+   - Model is loaded into memory (RAM or VRAM)
+   - Appropriate device (CPU/GPU) is selected
+   - Model is set to evaluation mode for inference
+
+3. **Pipeline Creation**
+   - Inference pipeline is created based on model type
+   - Tokenizers and processors are initialized
+   - Input/output handling is configured
+
+4. **Server Startup**
+   - REST API endpoint is created
+   - Port is assigned from available pool
+   - Health checks are configured
+   - Ready to accept requests!
+
+### Model File Locations
+
+After deployment, you can find model files at:
+
+```
+./
+├── huggingface_cache/          # Downloaded model files
+│   ├── models--bert-base-uncased/
+│   ├── models--gpt2/
+│   └── ...
+├── deployed_models/            # Deployment metadata
+│   └── my-model/
+└── logs/                       # Application logs
+```
+
+### Resource Usage
+
+- **Storage**: Models range from 100MB to several GB
+- **Memory**: Loaded models consume RAM/VRAM based on size
+- **CPU/GPU**: Used during inference requests
+
+## 🔧 API Reference
+
+### Deploy Model
+```
+POST /api/v1/deploy
+Content-Type: application/json
+
+{
+  "model": {
+    "model_id": "bert-base-uncased",
+    "model_source": "huggingface"
+  },
+  "model_type": "nlp",
+  "deployment_name": "my-model",
+  "hardware": {
+    "device": "auto"
+  },
+  "dependencies": {
+    "packages": []
+  }
+}
+```
+
+### WebSocket Progress Updates
+```
+ws://localhost:8000/api/v1/ws/{deployment_id}
+
+Messages:
+{
+  "status": "downloading",
+  "progress": 45,
+  "message": "Downloading model...",
+  "current_step": "Model download",
+  "completed_steps": 2,
+  "total_steps": 6
+}
+```
+
+### Run Inference
+```
+POST /api/v1/deployments/{deployment_id}/inference
+Content-Type: application/json
+
+{
+  "text": "Your input text here"
+}
+```
+
+### List Deployments
+```
+GET /api/v1/deployments
+
+Response:
+{
+  "status": "success",
+  "count": 3,
+  "deployments": [...]
+}
+```
+
+### Get Deployment Details
+```
+GET /api/v1/deployments/{deployment_id}
+```
+
+### Delete Deployment
+```
+DELETE /api/v1/deployments/{deployment_id}
+```
+
+## 🐛 Troubleshooting
+
+### Deployment Timeouts
+- **Problem**: Model download times out
+- **Solution**: Increase `MAX_DOWNLOAD_TIMEOUT` in `.env`
+- **Note**: Large models (>5GB) may need 30+ minutes
+
+### WebSocket Connection Issues
+- **Problem**: Progress updates not showing
+- **Solution**: Check backend is running and CORS settings
+- **Note**: WebSocket URL uses same host as frontend
+
+### Out of Memory Errors
+- **Problem**: Model too large for available RAM/VRAM
+- **Solution**: 
+  - Use smaller model
+  - Increase system memory
+  - Use CPU instead of GPU
+  - Adjust `MAX_MEMORY_PER_MODEL_GB` in `.env`
+
+### Port Already in Use
+- **Problem**: Cannot start backend/frontend
+- **Solution**: Change ports in `.env`
+  ```env
+  BACKEND_PORT=8001
+  FRONTEND_PORT=3001
+  ```
+
+### Model Not Found
+- **Problem**: HuggingFace model ID invalid
+- **Solution**: 
+  - Verify model exists on HuggingFace Hub
+  - Check model ID spelling
+  - Some models require HF token (set `HUGGINGFACE_TOKEN`)
+
+## 📊 Example Models to Try
+
+### Text Generation
+- `gpt2` - Small GPT-2 model
+- `facebook/opt-125m` - OPT language model
+- `EleutherAI/gpt-neo-125M` - GPT-Neo model
+
+### Sentiment Analysis
+- `distilbert-base-uncased-finetuned-sst-2-english`
+- `cardiffnlp/twitter-roberta-base-sentiment`
+
+### Question Answering
+- `deepset/roberta-base-squad2`
+- `distilbert-base-cased-distilled-squad`
+
+### Text Classification
+- `bert-base-uncased`
+- `distilbert-base-uncased`
+
+## 🔒 Security Considerations
+
+- Set `API_KEY_ENABLED=true` in `.env` for production
+- Configure firewall rules for exposed ports
+- Use HTTPS in production (configure reverse proxy)
+- Restrict CORS origins in `.env`
+- Keep dependencies updated
+
+## 📈 Performance Tips
+
+1. **Use GPU** when available for faster inference
+2. **Cache models** - redeploying same model is instant
+3. **Adjust workers** - increase `MAX_WORKERS` for concurrent requests
+4. **Monitor resources** - use `ENABLE_METRICS=true`
+5. **Use smaller models** when possible for faster loading
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📝 License
+
+This project is licensed under the MIT License.
+
+## 📧 Support
+
+For issues and questions:
+- Open an issue on GitHub
+- Check the troubleshooting section
+- Review API documentation at `/docs`
+
+## 🎉 Acknowledgments
+
+- HuggingFace for the transformers library and model hub
+- FastAPI for the excellent API framework
+- React and Vite for the frontend framework

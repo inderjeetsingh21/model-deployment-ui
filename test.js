@@ -1,0 +1,1 @@
+echo 'console.log("test")' > src/test.js

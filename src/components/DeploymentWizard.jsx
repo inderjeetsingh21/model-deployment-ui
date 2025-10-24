@@ -1,178 +1,154 @@
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Rocket } from 'lucide-react';
-import ModelSelection from './ModelSelection';
-import HardwareConfig from './HardwareConfig';
-import DependencyManager from './DependencyManager';
-import DeploymentConfig from './DeploymentConfig';
-import DeploymentSummary from './DeploymentSummary';
-import DeploymentProgress from './DeploymentProgress';
-import { deployModel} from '../services/api';
+import React, { useState } from 'react'
+import ModelSelection from './ModelSelection'
+import HardwareConfig from './HardwareConfig'
+import DependencyManager from './DependencyManager'
+import DeploymentConfig from './DeploymentConfig'
+import DeploymentSummary from './DeploymentSummary'
+import DeploymentProgress from './DeploymentProgress'
 
-const DeploymentWizard = () => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [isDeploying, setIsDeploying] = useState(false);
-  const [deploymentId, setDeploymentId] = useState(null);
-  const [config, setConfig] = useState({
-    // Model defaults
-    modelSource: 'huggingface',
-    modelType: 'nlp',
-    deploymentName: 'my-model',
-    
-    // Hardware defaults
-    hardware: 'cpu',
-    memoryAllocation: '8',
-    precision: 'fp16',
-    batchSize: '1',
-    
-    // Dependency defaults
-    autoDetectDeps: true,
-    pythonVersion: '3.10',
-    additionalDeps: [],
-    
-    // Deployment defaults
-    apiType: 'rest',
-    apiPort: '8001',
-    workers: '4',
-    timeout: '30',
-    deploymentTarget: 'docker',
-    enableMetrics: true,
-    enableLogging: true,
-    enableHealthCheck: true,
-    logLevel: 'INFO',
-  });
+const STEPS = [
+  { id: 1, name: 'Model', component: ModelSelection },
+  { id: 2, name: 'Hardware', component: HardwareConfig },
+  { id: 3, name: 'Dependencies', component: DependencyManager },
+  { id: 4, name: 'Deployment', component: DeploymentConfig },
+  { id: 5, name: 'Summary', component: DeploymentSummary }
+]
 
-  const steps = [
-    { number: 1, name: 'Model', component: ModelSelection },
-    { number: 2, name: 'Hardware', component: HardwareConfig },
-    { number: 3, name: 'Dependencies', component: DependencyManager },
-    { number: 4, name: 'Deployment', component: DeploymentConfig },
-    { number: 5, name: 'Summary', component: DeploymentSummary },
-  ];
+export default function DeploymentWizard() {
+  const [currentStep, setCurrentStep] = useState(1)
+  const [isDeploying, setIsDeploying] = useState(false)
+  const [deploymentData, setDeploymentData] = useState({
+    model: {
+      model_id: '',
+      model_source: 'huggingface'
+    },
+    model_type: 'nlp',
+    deployment_name: '',
+    hardware: {
+      device: 'auto',
+      gpu_memory: null,
+      cpu_threads: null
+    },
+    dependencies: {
+      packages: []
+    }
+  })
 
   const handleNext = () => {
-    if (currentStep < steps.length) {
-      setCurrentStep(currentStep + 1);
+    if (currentStep < STEPS.length) {
+      setCurrentStep(currentStep + 1)
     }
-  };
+  }
 
   const handlePrevious = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      setCurrentStep(currentStep - 1)
     }
-  };
-
-  const handleDeploy = async () => {
-    try {
-      setIsDeploying(true);
-      const result = await deployModel(config);
-      setDeploymentId(result.deployment_id);
-    } catch (error) {
-      console.error('Deployment error:', error);
-      alert(`Deployment failed: ${error.message}`);
-      setIsDeploying(false);
-    }
-  };
-
-  const isStepValid = () => {
-    switch (currentStep) {
-      case 1:
-        return config.modelSource && config.modelType && config.deploymentName &&
-               (config.modelSource !== 'huggingface' || config.modelId) &&
-               (config.modelSource !== 'local' || config.modelPath);
-      case 2:
-        return config.hardware && config.memoryAllocation && config.precision;
-      case 3:
-        return config.pythonVersion;
-      case 4:
-        return config.apiType && config.apiPort && config.deploymentTarget;
-      case 5:
-        return true;
-      default:
-        return false;
-    }
-  };
-
-  const CurrentStepComponent = steps[currentStep - 1]?.component;
-
-  if (isDeploying) {
-    return (
-      <div className="app">
-        <div className="container">
-          <div className="header">
-            <h1>Model Deployment Interface</h1>
-            <p>Automated model deployment in progress</p>
-          </div>
-          <div className="wizard-container">
-            <DeploymentProgress config={config} deploymentId={deploymentId} />
-          </div>
-        </div>
-      </div>
-    );
   }
 
+  const handleDataUpdate = (stepData) => {
+    setDeploymentData({ ...deploymentData, ...stepData })
+  }
+
+  const handleDeploy = () => {
+    setIsDeploying(true)
+  }
+
+  const handleDeploymentComplete = () => {
+    setIsDeploying(false)
+    setCurrentStep(1)
+    // Reset data
+    setDeploymentData({
+      model: {
+        model_id: '',
+        model_source: 'huggingface'
+      },
+      model_type: 'nlp',
+      deployment_name: '',
+      hardware: {
+        device: 'auto',
+        gpu_memory: null,
+        cpu_threads: null
+      },
+      dependencies: {
+        packages: []
+      }
+    })
+  }
+
+  if (isDeploying) {
+    return <DeploymentProgress 
+      deploymentData={deploymentData} 
+      onComplete={handleDeploymentComplete}
+      onCancel={() => setIsDeploying(false)}
+    />
+  }
+
+  const CurrentStepComponent = STEPS[currentStep - 1].component
+
   return (
-    <div className="app">
-      <div className="container">
-        <div className="header">
-          <h1>Model Deployment Interface</h1>
-          <p>Automated PyTorch Model Deployment Platform</p>
-        </div>
+    <div className="deployment-wizard">
+      {/* Header */}
+      <header className="wizard-header">
+        <h1>Automated PyTorch Model Deployment Platform</h1>
+      </header>
 
-        <div className="wizard-container">
-          <div className="progress-bar">
-            {steps.map((step) => (
-              <div
-                key={step.number}
-                className={`progress-step ${
-                  currentStep >= step.number ? 'active' : ''
-                } ${currentStep > step.number ? 'completed' : ''}`}
-              >
-                <div className="step-number">{step.number}</div>
-                <div style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
-                  {step.name}
+      {/* Progress Steps */}
+      <div className="wizard-steps">
+        <div className="steps-container">
+          {STEPS.map((step, index) => (
+            <div key={step.id} className="step-wrapper">
+              <div className={`step-item ${currentStep === step.id ? 'active' : ''} ${currentStep > step.id ? 'completed' : ''}`}>
+                <div className="step-circle">
+                  <span>{step.id}</span>
                 </div>
+                <div className="step-label">{step.name}</div>
               </div>
-            ))}
-          </div>
-
-          {CurrentStepComponent && (
-            <CurrentStepComponent config={config} setConfig={setConfig} />
-          )}
-
-          <div className="button-group">
-            <button
-              className="btn btn-secondary"
-              onClick={handlePrevious}
-              disabled={currentStep === 1}
-            >
-              <ChevronLeft size={20} />
-              Previous
-            </button>
-
-            {currentStep < steps.length ? (
-              <button
-                className="btn btn-primary"
-                onClick={handleNext}
-                disabled={!isStepValid()}
-              >
-                Next
-                <ChevronRight size={20} />
-              </button>
-            ) : (
-              <button
-                className="btn btn-success"
-                onClick={handleDeploy}
-                disabled={!isStepValid()}
-              >
-                <Rocket size={20} />
-                Deploy Model
-              </button>
-            )}
-          </div>
+              {index < STEPS.length - 1 && (
+                <div className={`step-connector ${currentStep > step.id ? 'completed' : ''}`} />
+              )}
+            </div>
+          ))}
         </div>
       </div>
-    </div>
-  );
-};
 
-export default DeploymentWizard;
+      {/* Content Area */}
+      <div className="wizard-content">
+        <CurrentStepComponent 
+          data={deploymentData} 
+          onUpdate={handleDataUpdate}
+          onNext={handleNext}
+        />
+      </div>
+
+      {/* Navigation Buttons */}
+      <div className="wizard-navigation">
+        <button 
+          className="btn-secondary"
+          onClick={handlePrevious}
+          disabled={currentStep === 1}
+        >
+          Previous
+        </button>
+        
+        {currentStep < STEPS.length ? (
+          <button 
+            className="btn-primary"
+            onClick={handleNext}
+            disabled={!deploymentData.model.model_id || !deploymentData.deployment_name}
+          >
+            Next
+          </button>
+        ) : (
+          <button 
+            className="btn-primary"
+            onClick={handleDeploy}
+            disabled={!deploymentData.model.model_id || !deploymentData.deployment_name}
+          >
+            Deploy
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}

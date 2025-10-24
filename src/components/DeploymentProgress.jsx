@@ -1,348 +1,290 @@
-// src/components/DeploymentProgress.jsx
-// Real-time deployment progress component
+import React, { useState, useEffect, useRef } from 'react'
+import { CheckCircle, XCircle, Loader, ExternalLink, Copy, AlertCircle } from 'lucide-react'
+import axios from 'axios'
 
-import { useState, useEffect, useRef } from 'react';
-import { getDeployment } from '../services/api';
-
-function DeploymentProgress({ deploymentId, onComplete, onError }) {
-  const [status, setStatus] = useState({
+export default function DeploymentProgress({ deploymentData, onComplete, onCancel }) {
+  const [progress, setProgress] = useState({
     status: 'initializing',
     progress: 0,
     message: 'Starting deployment...',
-  });
-  const [error, setError] = useState(null);
-  const pollInterval = useRef(null);
-  const wsRef = useRef(null);
+    current_step: '',
+    completed_steps: 0,
+    total_steps: 6,
+    elapsed_time: 0
+  })
+  const [deploymentResult, setDeploymentResult] = useState(null)
+  const [error, setError] = useState(null)
+  const wsRef = useRef(null)
 
   useEffect(() => {
-    // Start polling for status
-    startPolling();
-
-    // Try to connect via WebSocket for real-time updates
-    connectWebSocket();
-
+    startDeployment()
     return () => {
-      // Cleanup
-      if (pollInterval.current) {
-        clearInterval(pollInterval.current);
-      }
       if (wsRef.current) {
-        wsRef.current.close();
+        wsRef.current.close()
       }
-    };
-  }, [deploymentId]);
+    }
+  }, [])
 
-  const startPolling = () => {
-    // Poll every 2 seconds
-    pollInterval.current = setInterval(async () => {
-      try {
-        const data = await getDeployment(deploymentId);
-        
-        setStatus({
-          status: data.status,
-          progress: data.progress || 0,
-          message: data.message || '',
-        });
-
-        // Check if completed
-        if (data.status === 'running') {
-          // Success!
-          clearInterval(pollInterval.current);
-          if (onComplete) {
-            onComplete(data);
-          }
-        } else if (data.status === 'failed') {
-          // Failed
-          clearInterval(pollInterval.current);
-          setError(data.error || 'Deployment failed');
-          if (onError) {
-            onError(data.error);
-          }
-        }
-      } catch (err) {
-        console.error('Polling error:', err);
-        // Don't stop polling on error, might be temporary
-      }
-    }, 2000); // Poll every 2 seconds
-  };
-
-  const connectWebSocket = () => {
+  const startDeployment = async () => {
     try {
-      const wsUrl = 'ws://localhost:8000/ws';
-      const ws = new WebSocket(wsUrl);
+      // Start deployment
+      const response = await axios.post('/api/v1/deploy', deploymentData)
+      const { deployment_id, websocket_url } = response.data
+
+      // Connect to WebSocket for progress updates
+      const wsUrl = websocket_url.replace('localhost', window.location.hostname)
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
 
       ws.onopen = () => {
-        console.log('WebSocket connected for deployment updates');
-      };
+        console.log('WebSocket connected')
+        // Send ping every 10 seconds to keep connection alive
+        setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send('ping')
+          }
+        }, 10000)
+      }
 
       ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          // Check if this message is for our deployment
-          if (data.deployment_id === deploymentId) {
-            if (data.type === 'status_update') {
-              setStatus({
-                status: data.status,
-                progress: data.progress,
-                message: data.message,
-              });
-            } else if (data.type === 'deployment_completed') {
-              // Deployment completed!
-              setStatus({
-                status: 'running',
-                progress: 100,
-                message: 'Deployment successful',
-              });
-              
-              if (onComplete) {
-                onComplete(data);
-              }
-            } else if (data.type === 'deployment_failed') {
-              setError(data.error);
-              if (onError) {
-                onError(data.error);
-              }
-            }
-          }
-        } catch (err) {
-          console.error('WebSocket message parse error:', err);
+        const data = JSON.parse(event.data)
+        
+        // Ignore heartbeat messages
+        if (data.type === 'heartbeat') {
+          return
         }
-      };
+
+        setProgress(data)
+
+        // If deployment completed, fetch final result
+        if (data.status === 'completed') {
+          fetchDeploymentResult(deployment_id)
+        } else if (data.status === 'failed') {
+          setError(data.message)
+        }
+      }
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        // Polling will continue as fallback
-      };
+        console.error('WebSocket error:', error)
+        setError('Connection error occurred. Please check the backend server.')
+      }
 
       ws.onclose = () => {
-        console.log('WebSocket closed');
-      };
+        console.log('WebSocket closed')
+      }
 
-      wsRef.current = ws;
     } catch (err) {
-      console.error('WebSocket connection error:', err);
-      // Polling will continue as fallback
+      console.error('Deployment error:', err)
+      setError(err.response?.data?.detail || err.message || 'Deployment failed')
     }
-  };
+  }
 
-  const getStatusColor = () => {
-    switch (status.status) {
-      case 'running':
-        return '#28a745';
-      case 'failed':
-        return '#dc3545';
-      case 'initializing':
-      case 'creating_directory':
-      case 'creating_server':
-      case 'installing_dependencies':
-      case 'starting_server':
-      case 'verifying':
-        return '#007bff';
-      default:
-        return '#6c757d';
+  const fetchDeploymentResult = async (deploymentId) => {
+    try {
+      const response = await axios.get(`/api/v1/deployments/${deploymentId}`)
+      setDeploymentResult(response.data)
+    } catch (err) {
+      console.error('Failed to fetch deployment result:', err)
     }
-  };
+  }
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text)
+  }
 
   const getStatusIcon = () => {
-    switch (status.status) {
-      case 'running':
-        return '✓';
-      case 'failed':
-        return '✗';
-      default:
-        return '⋯';
+    if (error || progress.status === 'failed') {
+      return <XCircle size={48} className="status-icon error" />
+    } else if (progress.status === 'completed' && deploymentResult) {
+      return <CheckCircle size={48} className="status-icon success" />
+    } else {
+      return <Loader size={48} className="status-icon spinning" />
     }
-  };
+  }
 
-  if (error) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.errorBox}>
-          <div style={styles.errorIcon}>✗</div>
-          <h3>Deployment Failed</h3>
-          <p>{error}</p>
-          <details style={styles.details}>
-            <summary>Troubleshooting</summary>
-            <ul>
-              <li>Check backend logs: <code>tail -f logs/{deploymentId}.log</code></li>
-              <li>Verify model file is valid</li>
-              <li>Check system resources</li>
-              <li>Try a different port</li>
-            </ul>
-          </details>
-        </div>
-      </div>
-    );
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={styles.header}>
-          <span style={{ ...styles.icon, color: getStatusColor() }}>
-            {getStatusIcon()}
-          </span>
-          <h3>Deploying Model</h3>
+    <div className="deployment-progress">
+      <div className="progress-container">
+        {/* Status Icon */}
+        <div className="progress-status">
+          {getStatusIcon()}
+          <h2 className="progress-title">
+            {error || progress.status === 'failed' ? 'Deployment Failed' :
+             progress.status === 'completed' ? 'Deployment Successful!' :
+             'Deploying Model...'}
+          </h2>
         </div>
 
-        <div style={styles.progressContainer}>
-          <div style={styles.progressBar}>
-            <div
-              style={{
-                ...styles.progressFill,
-                width: `${status.progress}%`,
-                backgroundColor: getStatusColor(),
-              }}
-            />
-          </div>
-          <div style={styles.progressText}>{status.progress}%</div>
-        </div>
-
-        <div style={styles.statusInfo}>
-          <div style={styles.statusLabel}>Status:</div>
-          <div style={{ ...styles.statusValue, color: getStatusColor() }}>
-            {formatStatus(status.status)}
-          </div>
-        </div>
-
-        <div style={styles.messageBox}>
-          <div style={styles.messageIcon}>ℹ️</div>
-          <div style={styles.messageText}>{status.message}</div>
-        </div>
-
-        <div style={styles.deploymentId}>
-          Deployment ID: <code>{deploymentId}</code>
-        </div>
-
-        {status.status === 'running' && (
-          <div style={styles.successBox}>
-            <strong>🎉 Deployment Successful!</strong>
-            <p>Your model is now running and ready to serve predictions.</p>
+        {/* Progress Bar */}
+        {!error && progress.status !== 'completed' && (
+          <div className="progress-section">
+            <div className="progress-bar-container">
+              <div 
+                className="progress-bar-fill" 
+                style={{ width: `${progress.progress}%` }}
+              />
+            </div>
+            <div className="progress-info">
+              <span>{progress.progress}% Complete</span>
+              <span>{progress.completed_steps} of {progress.total_steps} steps</span>
+            </div>
           </div>
         )}
+
+        {/* Current Step */}
+        {!error && progress.status !== 'completed' && (
+          <div className="progress-steps">
+            <div className="step-current">
+              <strong>Current Step:</strong> {progress.current_step || 'Initializing...'}
+            </div>
+            <div className="step-message">{progress.message}</div>
+            <div className="step-time">
+              Elapsed Time: {formatTime(progress.elapsed_time)}
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="error-message">
+            <AlertCircle size={24} />
+            <div>
+              <strong>Error:</strong>
+              <p>{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Deployment Result */}
+        {deploymentResult && (
+          <div className="deployment-result">
+            <h3>Deployment Complete!</h3>
+            
+            <div className="result-section">
+              <h4>Model Information</h4>
+              <div className="info-grid">
+                <div className="info-item">
+                  <span className="info-label">Model ID:</span>
+                  <span className="info-value">{deploymentResult.model_id}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Type:</span>
+                  <span className="info-value">{deploymentResult.model_type}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Status:</span>
+                  <span className="info-value status-running">{deploymentResult.status}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Device:</span>
+                  <span className="info-value">{deploymentResult.model_info.device}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="result-section">
+              <h4>API Endpoint</h4>
+              <div className="endpoint-box">
+                <code>{deploymentResult.endpoint_url}</code>
+                <button 
+                  className="btn-icon" 
+                  onClick={() => copyToClipboard(deploymentResult.endpoint_url)}
+                  title="Copy to clipboard"
+                >
+                  <Copy size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="result-section">
+              <h4>Usage Examples</h4>
+              
+              <div className="code-example">
+                <div className="code-header">
+                  <span>cURL</span>
+                  <button 
+                    className="btn-icon" 
+                    onClick={() => copyToClipboard(deploymentResult.usage_instructions.example_curl)}
+                  >
+                    <Copy size={14} />
+                  </button>
+                </div>
+                <pre><code>{deploymentResult.usage_instructions.example_curl}</code></pre>
+              </div>
+
+              <div className="code-example">
+                <div className="code-header">
+                  <span>Python</span>
+                  <button 
+                    className="btn-icon" 
+                    onClick={() => copyToClipboard(deploymentResult.usage_instructions.example_python)}
+                  >
+                    <Copy size={14} />
+                  </button>
+                </div>
+                <pre><code>{deploymentResult.usage_instructions.example_python}</code></pre>
+              </div>
+            </div>
+
+            <div className="result-section">
+              <h4>What was deployed?</h4>
+              <p>
+                The system downloaded the <strong>{deploymentResult.model_id}</strong> model from HuggingFace Hub, 
+                loaded it into memory, and created an inference API endpoint. The model files are cached locally at{' '}
+                <code>{deploymentResult.model_info.cache_location}</code> for faster future deployments.
+              </p>
+              <p>
+                You can now send inference requests to the endpoint above using HTTP POST requests with JSON data. 
+                The model will process your input and return predictions in real-time.
+              </p>
+            </div>
+
+            <div className="result-section">
+              <h4>Testing the Model</h4>
+              <div className="test-options">
+                <a 
+                  href={deploymentResult.usage_instructions.test_ui_url} 
+                  className="btn-link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink size={16} />
+                  Open Test Interface
+                </a>
+                <a 
+                  href={`http://localhost:8000/docs`} 
+                  className="btn-link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink size={16} />
+                  API Documentation
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="progress-actions">
+          {(error || deploymentResult) && (
+            <button className="btn-primary" onClick={onComplete}>
+              Deploy Another Model
+            </button>
+          )}
+          {!error && progress.status !== 'completed' && (
+            <button className="btn-secondary" onClick={onCancel}>
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
     </div>
-  );
+  )
 }
-
-const formatStatus = (status) => {
-  const statusMap = {
-    initializing: 'Initializing',
-    creating_directory: 'Creating Directory',
-    creating_server: 'Creating Server',
-    installing_dependencies: 'Installing Dependencies',
-    starting_server: 'Starting Server',
-    verifying: 'Verifying',
-    running: 'Running',
-    failed: 'Failed',
-    stopped: 'Stopped',
-  };
-  return statusMap[status] || status;
-};
-
-const styles = {
-  container: {
-    maxWidth: '600px',
-    margin: '20px auto',
-    padding: '20px',
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: '8px',
-    padding: '24px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '24px',
-  },
-  icon: {
-    fontSize: '32px',
-    fontWeight: 'bold',
-  },
-  progressContainer: {
-    marginBottom: '20px',
-  },
-  progressBar: {
-    width: '100%',
-    height: '24px',
-    backgroundColor: '#e9ecef',
-    borderRadius: '12px',
-    overflow: 'hidden',
-    marginBottom: '8px',
-  },
-  progressFill: {
-    height: '100%',
-    transition: 'width 0.3s ease',
-    borderRadius: '12px',
-  },
-  progressText: {
-    textAlign: 'center',
-    fontSize: '14px',
-    color: '#6c757d',
-    fontWeight: 'bold',
-  },
-  statusInfo: {
-    display: 'flex',
-    gap: '8px',
-    marginBottom: '16px',
-    padding: '12px',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '4px',
-  },
-  statusLabel: {
-    fontWeight: 'bold',
-  },
-  statusValue: {
-    fontWeight: 'bold',
-  },
-  messageBox: {
-    display: 'flex',
-    gap: '12px',
-    padding: '12px',
-    backgroundColor: '#e7f3ff',
-    borderRadius: '4px',
-    marginBottom: '16px',
-  },
-  messageIcon: {
-    fontSize: '20px',
-  },
-  messageText: {
-    flex: 1,
-    color: '#0056b3',
-  },
-  deploymentId: {
-    fontSize: '12px',
-    color: '#6c757d',
-    textAlign: 'center',
-  },
-  successBox: {
-    marginTop: '16px',
-    padding: '16px',
-    backgroundColor: '#d4edda',
-    border: '1px solid #c3e6cb',
-    borderRadius: '4px',
-    color: '#155724',
-  },
-  errorBox: {
-    padding: '24px',
-    backgroundColor: '#f8d7da',
-    border: '1px solid #f5c6cb',
-    borderRadius: '8px',
-    color: '#721c24',
-    textAlign: 'center',
-  },
-  errorIcon: {
-    fontSize: '48px',
-    marginBottom: '16px',
-  },
-  details: {
-    marginTop: '16px',
-    textAlign: 'left',
-  },
-};
-
-export default DeploymentProgress;

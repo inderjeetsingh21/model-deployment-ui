@@ -1,276 +1,237 @@
-# Quick Start Guide - Model Deployment UI
+# Quick Start Guide
 
-## 🚀 Fast Track Installation (5 Minutes)
+Get your first model deployed in 5 minutes!
 
-### Step 1: Download and Extract
+## Prerequisites Check
+
 ```bash
-# Navigate to where you want the project
-cd ~
+# Check Python version (need 3.9+)
+python3 --version
 
-# If you received the files, extract them
-# The folder should contain: package.json, src/, index.html, etc.
-cd model-deployment-ui
+# Check Node.js version (need 18+)
+node --version
+
+# Check npm
+npm --version
 ```
 
-### Step 2: Run Automated Installation
-```bash
-# Make the script executable (if not already)
-chmod +x install.sh
+## Installation (2 minutes)
 
-# Run the installation script
-./install.sh
+### 1. Install Backend Dependencies
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-The script will:
-- ✓ Install Node.js 20 (if needed)
-- ✓ Install Python 3 (if needed)
-- ✓ Install all dependencies
-- ✓ Build production files
-- ✓ Optionally set up auto-start service
-- ✓ Optionally configure firewall
+### 2. Install Frontend Dependencies
 
-**Total time: ~5 minutes** (depending on internet speed)
+```bash
+cd ..
+npm install
+```
 
-### Step 3: Start the Application
+### 3. Configure Environment
 
-**Option A - Development Mode** (recommended for testing):
+```bash
+cp .env.example .env
+# Use default settings - no changes needed for testing!
+```
+
+## Start Services (30 seconds)
+
+### Terminal 1 - Backend
+
+```bash
+cd backend
+source venv/bin/activate
+python -m backend.api_server
+```
+
+Wait for:
+```
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+### Terminal 2 - Frontend
+
 ```bash
 npm run dev
 ```
 
-**Option B - Production Mode**:
-```bash
-npx serve -s dist -l 3000
+Wait for:
+```
+➜  Local:   http://localhost:3000/
 ```
 
-**Option C - Background Service** (if you chose auto-start):
+## Deploy Your First Model (2 minutes)
+
+### 1. Open Browser
+Navigate to: http://localhost:3000
+
+### 2. Configure Model (Step 1/5)
+- **Model Source:** HuggingFace Hub (default)
+- **Model ID:** `distilbert-base-uncased-finetuned-sst-2-english`
+- **Model Type:** NLP/Text
+- **Deployment Name:** `my-first-model`
+- Click **Next**
+
+### 3. Hardware (Step 2/5)
+- **Device:** Auto (default)
+- Click **Next**
+
+### 4. Dependencies (Step 3/5)
+- Nothing to configure
+- Click **Next**
+
+### 5. Review (Step 4/5)
+- Check your settings
+- Click **Next**
+
+### 6. Deploy (Step 5/5)
+- Review summary
+- Click **Deploy**
+
+### 7. Watch Progress
+- See real-time progress
+- Model downloads (~268MB, 1-2 minutes)
+- Wait for "Deployment Successful!"
+
+## Test Your Model (1 minute)
+
+### Option 1: cURL
+
 ```bash
-sudo systemctl status model-deployment-ui
-# Already running!
+# Copy the endpoint URL from deployment result (e.g., http://localhost:8100/predict)
+curl -X POST http://localhost:8100/predict \
+  -H "Content-Type: application/json" \
+  -d '{"text": "I love this platform!"}'
 ```
 
-### Step 4: Access the Interface
-
-Open your browser:
-- **Local**: http://localhost:3000
-- **Remote**: http://YOUR_SERVER_IP:3000
-
----
-
-## ⚡ Manual Installation (If Script Fails)
-
-### 1. Install Node.js
-```bash
-# Ubuntu/Debian
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Verify
-node --version  # Should be 18+
+Expected result:
+```json
+{
+  "status": "success",
+  "result": [{
+    "label": "POSITIVE",
+    "score": 0.9998
+  }]
+}
 ```
 
-### 2. Install Dependencies
-```bash
-cd model-deployment-ui
-npm install
+### Option 2: Python
+
+```python
+import requests
+
+response = requests.post(
+    'http://localhost:8100/predict',
+    json={"text": "I love this platform!"}
+)
+
+print(response.json())
 ```
 
-### 3. Start Development Server
+### Option 3: API Docs
+
+1. Open http://localhost:8000/docs
+2. Find `/api/v1/deployments/{deployment_id}/inference`
+3. Click "Try it out"
+4. Enter: `deployment_id`: `my-first-model`
+5. Enter: `{"text": "This is amazing!"}`
+6. Click "Execute"
+
+## What Just Happened?
+
+✅ Model downloaded from HuggingFace  
+✅ Model loaded into memory  
+✅ API endpoint created  
+✅ Ready to accept requests  
+
+## Try Another Model
+
+Now deploy GPT-2 for text generation:
+
+1. Click "Deploy Another Model"
+2. Model ID: `gpt2`
+3. Model Type: NLP/Text
+4. Name: `gpt2-generator`
+5. Deploy!
+
+Test GPT-2:
 ```bash
-npm run dev
+curl -X POST http://localhost:8101/predict \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Once upon a time", "max_length": 50}'
 ```
 
-Access at: http://localhost:3000
+## Common Issues
 
----
+### Port Already in Use
 
-## 📱 Using the Interface
+**Error:** `Address already in use`
 
-### Deployment Wizard Flow:
-
-1. **Model Selection**
-   - Choose model source (HuggingFace, Local, Upload)
-   - Enter model ID (e.g., `bert-base-uncased`)
-   - Select model type (NLP, Vision, Audio, Multimodal)
-
-2. **Hardware Configuration**
-   - Select CPU or GPU
-   - Set memory allocation
-   - Choose precision (FP32, FP16, INT8)
-
-3. **Dependencies**
-   - Auto-detect packages
-   - Select optional libraries
-   - Add custom requirements
-
-4. **Deployment Settings**
-   - Choose API type (REST/gRPC)
-   - Set port number
-   - Configure workers and timeout
-   - Select deployment target (Docker/Local)
-
-5. **Review & Deploy**
-   - Review all settings
-   - Click "Deploy Model"
-   - Watch real-time progress
-
-6. **Success!**
-   - Get API endpoint URL
-   - Copy example code
-   - Test your deployment
-
----
-
-## 🔧 Common Commands
-
-### Development
-```bash
-npm run dev          # Start dev server with hot reload
-npm run build        # Build for production
-npm run preview      # Preview production build
+**Solution:** Edit `.env`:
+```env
+BACKEND_PORT=8001
+FRONTEND_PORT=3001
 ```
 
-### Service Management (if installed)
+### Python Dependencies Error
+
+**Error:** `No module named 'transformers'`
+
+**Solution:** Activate venv first:
 ```bash
-sudo systemctl start model-deployment-ui      # Start service
-sudo systemctl stop model-deployment-ui       # Stop service
-sudo systemctl restart model-deployment-ui    # Restart service
-sudo systemctl status model-deployment-ui     # Check status
-journalctl -u model-deployment-ui -f          # View logs
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### Manual Production Server
-```bash
-# Install serve globally (one time)
-sudo npm install -g serve
+### WebSocket Connection Failed
 
-# Run production server
-serve -s dist -l 3000
+**Error:** Progress not showing
 
-# Run in background
-nohup serve -s dist -l 3000 > frontend.log 2>&1 &
-```
+**Solution:** Ensure backend is running and check CORS settings in `.env`
 
----
+## Next Steps
 
-## 🐛 Troubleshooting
+- 📚 Read [README.md](README.md) for detailed documentation
+- 🎓 Check [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) to understand what happens
+- 🚀 Try different models from HuggingFace
+- 🔧 Customize configuration in `.env`
+- 🌐 Build your application using the API
 
-### "Port 3000 already in use"
-```bash
-# Find and kill the process
-sudo lsof -i :3000
-sudo kill -9 <PID>
-```
+## Quick Reference
 
-### "Cannot find module"
-```bash
-# Reinstall dependencies
-rm -rf node_modules package-lock.json
-npm install
-```
+| Action | Command |
+|--------|---------|
+| Start Backend | `python -m backend.api_server` |
+| Start Frontend | `npm run dev` |
+| View Logs | Check terminal output |
+| API Docs | http://localhost:8000/docs |
+| Frontend | http://localhost:3000 |
+| Stop Services | Ctrl+C in terminals |
 
-### "Permission denied"
-```bash
-# Fix ownership
-sudo chown -R $USER:$USER ~/model-deployment-ui
-```
+## Popular Models to Try
 
-### Cannot access remotely
-```bash
-# Open firewall port
-sudo ufw allow 3000/tcp  # Ubuntu
-sudo firewall-cmd --add-port=3000/tcp --permanent && sudo firewall-cmd --reload  # RHEL/CentOS
+### Sentiment Analysis
+- `distilbert-base-uncased-finetuned-sst-2-english`
+- `cardiffnlp/twitter-roberta-base-sentiment`
 
-# Check if service is listening
-sudo netstat -tlnp | grep 3000
-```
+### Text Generation
+- `gpt2` (small)
+- `facebook/opt-125m`
 
-### Backend not connecting
-```bash
-# Verify backend is running
-curl http://localhost:8000/health
+### Question Answering
+- `deepset/roberta-base-squad2`
+- `distilbert-base-cased-distilled-squad`
 
-# Check backend logs
-# (depends on how you started the backend)
-```
+## Support
 
----
+- 📖 Full docs: [README.md](README.md)
+- 🐛 Issues: Create GitHub issue
+- 💡 Questions: Check DEPLOYMENT_GUIDE.md
 
-## 📊 System Requirements
-
-**Minimum**:
-- 2 CPU cores
-- 2 GB RAM
-- 10 GB disk space
-
-**Recommended**:
-- 4+ CPU cores
-- 4+ GB RAM
-- 20 GB disk space
-
----
-
-## 🔗 Important URLs
-
-Once running:
-- **Frontend UI**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
-
----
-
-## ✅ Verification Checklist
-
-After installation, verify:
-
-- [ ] Can access http://localhost:3000
-- [ ] Interface loads without errors (check browser console)
-- [ ] Can navigate through wizard steps
-- [ ] Backend API is running on port 8000
-- [ ] Can see API documentation at http://localhost:8000/docs
-
----
-
-## 📚 Next Steps
-
-1. **Start Backend**: Set up the Python backend API server
-2. **Deploy Model**: Use the wizard to deploy your first model
-3. **Test API**: Use the provided curl/Python examples
-4. **Production Setup**: Configure Nginx and SSL if needed
-
----
-
-## 💡 Tips
-
-- **Development**: Use `npm run dev` for auto-reload during development
-- **Production**: Always use `npm run build` + serve or Nginx
-- **Monitoring**: Check logs regularly for errors
-- **Security**: Use firewall rules and consider SSL/TLS for production
-- **Performance**: Production build is ~10x faster than dev mode
-
----
-
-## 🆘 Getting Help
-
-If something doesn't work:
-
-1. Check the browser console for errors (F12)
-2. Check the terminal output for backend errors
-3. Verify all services are running
-4. Review the full README.md for detailed instructions
-5. Check firewall and network settings
-
----
-
-## 🎉 You're Ready!
-
-The interface should now be fully operational. Start deploying models!
-
-**Quick Test**:
-1. Open http://localhost:3000
-2. Select "HuggingFace Hub" as source
-3. Enter "distilbert-base-uncased" as model ID
-4. Complete the wizard
-5. Click "Deploy Model"
-6. Watch the magic happen! ✨
+Happy deploying! 🚀
